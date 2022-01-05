@@ -1,0 +1,7 @@
+query($org: String!, $repo: String!, $issue: Int!) {
+  repository(owner: $org, name: $repo) {
+    issue(number: $issue) {
+      title
+    }
+  }
+}

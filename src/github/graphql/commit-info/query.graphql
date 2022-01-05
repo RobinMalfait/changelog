@@ -1,0 +1,10 @@
+query($org: String!, $repo: String!, $hash: String!) {
+  repository(owner: $org, name: $repo) {
+    object(expression: $hash) {
+      ... on Commit {
+        short_hash: abbreviatedOid
+        title: messageHeadline
+      }
+    }
+  }
+}
