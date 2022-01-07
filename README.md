@@ -80,9 +80,9 @@ By default we will print out the notes from the `[Unreleased]` section if
 entries already exist in that section. If not, then we will copy the contents
 of the `latest` version.
 
-- `changelog notes unreleased`, this will _always_ print the notes of the
+- `changelog notes unreleased` this will _always_ print the notes of the
   `[Unreleased]` section, even if nothing exists yet.
-- `changelog notes latest`, this will _always_ print the notes of the newest
+- `changelog notes latest` this will _always_ print the notes of the newest
   version in the list.
 - `changelog notes 3.0.5`, this will print the notes of a specific version.
 
@@ -91,8 +91,8 @@ of the `latest` version.
 This will allow you to list the available versions (without the notes) as a
 quick summary. By default we will list the 10 most recent versions.
 
-- `-a, --amount <AMOUNT>` Amount of versions to show [default: 10]
-- `--all` Shorthand for "--amount all"
+- `-a, --amount <AMOUNT>` amount of versions to show [default: 10]
+- `--all` shorthand for "--amount all"
 
 E.g.:
 
@@ -104,4 +104,22 @@ $ changelog list
 
 ### `changelog release`
 
-TODO
+This allows you to create a new "release". It will take anything from the
+`[Unreleased]` section into the new version. It will also add the current date
+and update the references.
+
+> Currently we assume that you have a `package.json` file.
+
+We have different strategies for releasing:
+
+- `infer` when you run the `changelog release` as-is, then we will `infer` the
+  version found in the `package.json`. This is useful in case you just ran `npm
+  version patch` for example.
+- `major` when you run `changelog release major`, then we will take the current
+  version from `package.json`, and increase the `major` part of the semver.
+- `minor` when you run `changelog release minor`, then we will take the current
+  version from `package.json`, and increase the `minor` part of the semver.
+- `patch` when you run `changelog release patch`, then we will take the current
+  version from `package.json`, and increase the `patch` part of the semver.
+- `<explicit>` when you run `changelog release 3.0.2`, then we use the semver
+  you provided.
