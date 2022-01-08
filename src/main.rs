@@ -4,6 +4,8 @@ mod markdown;
 mod package;
 
 use crate::markdown::ast::NEXT_OR_LATEST;
+use crate::markdown::ast::UNRELEASED_HEADING;
+use chrono::prelude::*;
 use clap::{AppSettings, Parser, Subcommand};
 use github::github_info::GitHubInfo;
 use markdown::ast::Node;
@@ -208,8 +210,81 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("Couldn't find notes for version: {}", version);
             }
         }
-        Commands::Release { version: _ } => {
-            println!("{:#?}", &args);
+        Commands::Release { version } => {
+            let date = Local::now().format("%Y-%m-%d");
+
+            if let Some(unreleased) = root.find_node_mut(&|node| {
+                if let Some(MarkdownToken::H2(name)) = &node.data {
+                    name == UNRELEASED_HEADING
+                } else {
+                    false
+                }
+            }) {
+                // Convert to the new version
+                unreleased.rename(&format!("[{}] - {}", version, date));
+
+                // Insert new [Unreleased] section at the top
+                let mut new_unreleased =
+                    Node::from_token(MarkdownToken::H2(UNRELEASED_HEADING.to_string()));
+                let mut ul = Node::from_token(MarkdownToken::UnorderedList);
+                let li = Node::from_token(MarkdownToken::ListItem("Nothing yet!".to_string()));
+
+                ul.add_child(li);
+                new_unreleased.add_child(ul);
+
+                root.children
+                    .get_mut(0)
+                    .expect("Couldn't find main heading, is your CHANGELOG.md formatted correctly?")
+                    .add_child_at(2, new_unreleased);
+
+                // Update references at the bottom
+                let c = root.clone();
+                let old_version = c
+                    .find_latest_version()
+                    .expect("Couldn't find latest version");
+
+                if let Some(unreleased_reference) = root.find_node_mut(&|node| {
+                    if let Some(MarkdownToken::Reference(name, _)) = &node.data {
+                        name.eq_ignore_ascii_case("unreleased")
+                    } else {
+                        false
+                    }
+                }) {
+                    if let Some(MarkdownToken::Reference(name, link)) = &unreleased_reference.data {
+                        let (updated_link, new_link) = (
+                            link.clone().replace(old_version, &version.to_string()),
+                            link.clone().replace("HEAD", &format!("v{}", version)),
+                        );
+
+                        // Update unreleased_reference
+                        unreleased_reference.data =
+                            Some(MarkdownToken::Reference(name.to_string(), updated_link));
+
+                        // Insert new version reference
+                        let new_version_reference = Node::from_token(MarkdownToken::Reference(
+                            version.to_string(),
+                            new_link,
+                        ));
+
+                        match root.children.iter().position(|node| {
+                            if let Some(MarkdownToken::Reference(name, _)) = &node.data {
+                                name.eq_ignore_ascii_case("unreleased")
+                            } else {
+                                false
+                            }
+                        }) {
+                            Some(idx) => {
+                                root.add_child_at(idx + 1, new_version_reference);
+                            }
+                            None => {
+                                root.add_child(new_version_reference);
+                            }
+                        }
+                    }
+                }
+            }
+
+            std::fs::write(file_path, root.to_string() + "\n")?;
         }
         Commands::List { amount, all } => {
             let references = root

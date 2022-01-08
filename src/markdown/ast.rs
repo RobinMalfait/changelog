@@ -2,7 +2,7 @@ use crate::MarkdownToken;
 use std::fmt::Display;
 use std::str::FromStr;
 
-const UNRELEASED_HEADING: &str = "[Unreleased]";
+pub const UNRELEASED_HEADING: &str = "[Unreleased]";
 pub const NEXT_OR_LATEST: &str = "next_or_latest";
 
 #[derive(Debug, Clone)]
@@ -26,6 +26,17 @@ impl Node {
 
     pub fn add_child_at(&mut self, index: usize, child: Node) {
         self.children.insert(index, child);
+    }
+
+    pub fn rename(&mut self, new_name: &str) {
+        match self.data {
+            Some(MarkdownToken::H1(ref mut heading))
+            | Some(MarkdownToken::H2(ref mut heading))
+            | Some(MarkdownToken::H3(ref mut heading)) => {
+                *heading = new_name.to_string();
+            }
+            _ => {}
+        }
     }
 
     // TODO: This is horrible... refactor this!
@@ -102,7 +113,7 @@ impl Node {
         }
     }
 
-    fn find_node<'a>(&'a self, predicate: &dyn Fn(&Node) -> bool) -> Option<&'a Node> {
+    pub fn find_node<'a>(&'a self, predicate: &dyn Fn(&Node) -> bool) -> Option<&'a Node> {
         if predicate(self) {
             return Some(self);
         }
@@ -116,7 +127,23 @@ impl Node {
         None
     }
 
-    fn find_node_mut(&mut self, predicate: &dyn Fn(&Node) -> bool) -> Option<&mut Node> {
+    pub fn find_latest_version(&self) -> Option<&str> {
+        if let Some(node) = self.find_node(&|node| {
+            if let Some(MarkdownToken::Reference(name, _)) = &node.data {
+                !name.eq_ignore_ascii_case("unreleased")
+            } else {
+                false
+            }
+        }) {
+            if let Some(MarkdownToken::Reference(name, _)) = &node.data {
+                return Some(name);
+            }
+        }
+
+        None
+    }
+
+    pub fn find_node_mut(&mut self, predicate: &dyn Fn(&Node) -> bool) -> Option<&mut Node> {
         if predicate(self) {
             return Some(self);
         }

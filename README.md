@@ -108,7 +108,8 @@ This allows you to create a new "release". It will take anything from the
 `[Unreleased]` section into the new version. It will also add the current date
 and update the references.
 
-> Currently we assume that you have a `package.json` file.
+> Currently we assume that you have a `package.json` file, if you are using one
+> of the implicit/relative strategies.
 
 We have different strategies for releasing:
 
