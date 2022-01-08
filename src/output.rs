@@ -9,22 +9,26 @@ pub fn output(str: String) {
     if str.contains('\n') {
         eprintln!("  {}\n", " CHANGELOG ".black().on_bright_blue().bold());
 
-        let str = str.trim();
-        let lines = str.lines();
-        let total_lines = lines.clone().count();
-
-        for (row_idx, line) in lines.enumerate() {
-            eprint!("  ");
-            if row_idx < total_lines {
-                println!("{}", line);
-            } else {
-                print!("{}", line);
-            }
-        }
+        output_indented(str);
     } else {
         eprint!("  {} ", " CHANGELOG ".black().on_bright_blue().bold());
         println!("{}", str);
     }
 
     eprintln!()
+}
+
+pub fn output_indented(str: String) {
+    let str = str.trim();
+    let lines = str.lines();
+    let total_lines = lines.clone().count();
+
+    for (row_idx, line) in lines.enumerate() {
+        eprint!("  ");
+        if row_idx < total_lines {
+            println!("{}", line);
+        } else {
+            print!("{}", line);
+        }
+    }
 }

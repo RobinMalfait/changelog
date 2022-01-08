@@ -6,7 +6,10 @@ mod output;
 mod package;
 
 use crate::changelog::{Amount, Changelog};
+use crate::output::output;
+use crate::output::output_indented;
 use clap::{AppSettings, Parser, Subcommand};
+use colored::*;
 use github::github_info::GitHubInfo;
 use markdown::ast::Node;
 use markdown::tokens::MarkdownToken;
@@ -171,11 +174,32 @@ async fn main() -> Result<(), std::io::Error> {
             message,
             name,
         } => {
-            if let Some(link) = link {
+            let message = if let Some(link) = link {
                 let data: GitHubInfo = link.parse().unwrap();
                 changelog.add_list_item_to_section(name, data.to_string());
+                data.to_string()
             } else if let Some(message) = message {
                 changelog.add_list_item_to_section(name, message.to_string());
+                message.to_string()
+            } else {
+                "".to_string()
+            };
+
+            output(format!(
+                "Added a new entry to the {} section:",
+                name.blue().bold()
+            ));
+
+            if let Some(node) = changelog.get_contents_of_section(&Some("unreleased".to_string())) {
+                let text = node.to_string();
+
+                let text = text.replace(
+                    &format!("- {}", message),
+                    &format!("- {}", message.green().bold()),
+                );
+
+                output_indented(text);
+                eprintln!()
             }
 
             changelog.persist()

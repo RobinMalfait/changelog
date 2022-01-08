@@ -153,7 +153,7 @@ impl Changelog {
         }
     }
 
-    fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
+    pub fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
         let node = self.root.find_node(&|node| {
             if let Some(MarkdownToken::H2(section_name)) = &node.data {
                 match name {
@@ -311,7 +311,11 @@ impl Changelog {
                     }
                 }
                 None => {
-                    println!("Todo>>");
+                    output(
+                        "Couldn't find latest version, is your CHANGELOG.md formatted correctly?"
+                            .to_string(),
+                    );
+                    std::process::exit(1);
                 }
             }
         }
