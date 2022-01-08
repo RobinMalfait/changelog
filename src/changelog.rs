@@ -1,7 +1,9 @@
+use crate::output::output;
 use crate::MarkdownToken;
 use crate::Node;
 use crate::SemVer;
 use chrono::prelude::*;
+use colored::*;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -26,14 +28,17 @@ impl<'a> Changelog<'a> {
         let meta = std::fs::metadata(&self.file_path);
 
         if meta.is_ok() {
-            eprintln!("Changelog already exists at: {}", self.file_path.display());
+            output(format!(
+                "Changelog already exists at: {}",
+                self.file_path.to_str().unwrap().white().dimmed()
+            ));
 
             Ok(())
         } else {
-            println!(
+            output(format!(
                 "Created new changelog file at: {}",
-                self.file_path.display()
-            );
+                self.file_path.to_str().unwrap().white().dimmed()
+            ));
 
             self.persist()
         }
@@ -174,14 +179,14 @@ impl<'a> Changelog<'a> {
 
     pub fn notes(&self, version: &Option<String>) -> Result<(), std::io::Error> {
         if let Some(node) = self.get_contents_of_section(version) {
-            print!("{}", node);
+            output(node.to_string());
         } else {
             match *version {
                 Some(ref version) => {
-                    eprintln!("Couldn't find notes for version: {}", version);
+                    output(format!("Couldn't find notes for version: {}", version));
                 }
                 None => {
-                    println!("Couldn't find notes for version: <unknown>");
+                    output("Couldn't find notes for version: <unknown>".to_string());
                 }
             }
         }
@@ -190,7 +195,7 @@ impl<'a> Changelog<'a> {
     }
 
     pub fn list(&self, amount: &Amount, all: &bool) -> Result<(), std::io::Error> {
-        let references = self
+        let releases = self
             .root
             .filter_nodes(&|node| matches!(&node.data, Some(MarkdownToken::Reference(_, _))))
             .iter()
@@ -209,7 +214,11 @@ impl<'a> Changelog<'a> {
             .collect::<Vec<_>>()
             .join("\n");
 
-        println!("{}", references);
+        if releases.is_empty() {
+            output("There are no releases yet.".to_string());
+        } else {
+            output(releases)
+        }
 
         Ok(())
     }
@@ -244,45 +253,52 @@ impl<'a> Changelog<'a> {
 
             // Update references at the bottom
             let c = self.clone();
-            let old_version = c
-                .find_latest_version()
-                .expect("Couldn't find latest version");
-
-            if let Some(unreleased_reference) = self.root.find_node_mut(&|node| {
-                if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                    name.eq_ignore_ascii_case(UNRELEASED_HEADING)
-                } else {
-                    false
-                }
-            }) {
-                if let Some(MarkdownToken::Reference(name, link)) = &unreleased_reference.data {
-                    let (updated_link, new_link) = (
-                        link.clone().replace(old_version, &version.to_string()),
-                        link.clone().replace("HEAD", &format!("v{}", version)),
-                    );
-
-                    // Update unreleased_reference
-                    unreleased_reference.data =
-                        Some(MarkdownToken::Reference(name.to_string(), updated_link));
-
-                    // Insert new version reference
-                    let new_version_reference =
-                        Node::from_token(MarkdownToken::Reference(version.to_string(), new_link));
-
-                    match self.root.children.iter().position(|node| {
+            match c.find_latest_version() {
+                Some(old_version) => {
+                    if let Some(unreleased_reference) = self.root.find_node_mut(&|node| {
                         if let Some(MarkdownToken::Reference(name, _)) = &node.data {
                             name.eq_ignore_ascii_case(UNRELEASED_HEADING)
                         } else {
                             false
                         }
                     }) {
-                        Some(idx) => {
-                            self.root.add_child_at(idx + 1, new_version_reference);
-                        }
-                        None => {
-                            self.root.add_child(new_version_reference);
+                        if let Some(MarkdownToken::Reference(name, link)) =
+                            &unreleased_reference.data
+                        {
+                            let (updated_link, new_link) = (
+                                link.clone().replace(old_version, &version.to_string()),
+                                link.clone().replace("HEAD", &format!("v{}", version)),
+                            );
+
+                            // Update unreleased_reference
+                            unreleased_reference.data =
+                                Some(MarkdownToken::Reference(name.to_string(), updated_link));
+
+                            // Insert new version reference
+                            let new_version_reference = Node::from_token(MarkdownToken::Reference(
+                                version.to_string(),
+                                new_link,
+                            ));
+
+                            match self.root.children.iter().position(|node| {
+                                if let Some(MarkdownToken::Reference(name, _)) = &node.data {
+                                    name.eq_ignore_ascii_case(UNRELEASED_HEADING)
+                                } else {
+                                    false
+                                }
+                            }) {
+                                Some(idx) => {
+                                    self.root.add_child_at(idx + 1, new_version_reference);
+                                }
+                                None => {
+                                    self.root.add_child(new_version_reference);
+                                }
+                            }
                         }
                     }
+                }
+                None => {
+                    println!("Todo>>");
                 }
             }
         }

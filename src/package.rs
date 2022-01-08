@@ -1,3 +1,5 @@
+use crate::output::output;
+use colored::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::fs::File;
@@ -104,8 +106,26 @@ pub struct PackageJSON {
 
 impl PackageJSON {
     fn read(path: &str) -> PackageJSON {
-        let file = File::open(path).unwrap();
-
-        serde_json::from_reader(file).expect("JSON was not well-formatted")
+        match File::open(path) {
+            Ok(file) => match serde_json::from_reader(file) {
+                Ok(pkg) => pkg,
+                Err(e) => {
+                    output(format!(
+                        "Error while reading {}: {}",
+                        "package.json".blue(),
+                        e.to_string().red()
+                    ));
+                    std::process::exit(1);
+                }
+            },
+            Err(e) => {
+                output(format!(
+                    "Error while reading {}: {}",
+                    "package.json".blue(),
+                    e.to_string().red()
+                ));
+                std::process::exit(1);
+            }
+        }
     }
 }

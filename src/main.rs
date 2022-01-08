@@ -2,6 +2,7 @@ mod changelog;
 mod github;
 mod graphql;
 mod markdown;
+mod output;
 mod package;
 
 use crate::changelog::{Amount, Changelog};
