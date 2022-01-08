@@ -142,10 +142,7 @@ enum Commands {
 async fn main() -> Result<(), std::io::Error> {
     let args = Cli::parse();
 
-    let pwd = std::fs::canonicalize(&args.pwd).expect("File path doesn't seem to exist");
-    let file_path = pwd.join(&args.filename);
-
-    let mut changelog = Changelog::new(&file_path);
+    let mut changelog = Changelog::new(&args.pwd, &args.filename);
 
     match &args.command {
         Commands::Init => changelog.init(),

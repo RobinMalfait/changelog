@@ -1,24 +1,37 @@
+use crate::github::repo::Repo;
 use crate::output::output;
 use crate::MarkdownToken;
 use crate::Node;
 use crate::SemVer;
 use chrono::prelude::*;
 use colored::*;
-use std::path::Path;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 const UNRELEASED_HEADING: &str = "Unreleased";
 
 #[derive(Debug, Clone)]
-pub struct Changelog<'a> {
-    file_path: &'a Path,
+pub struct Changelog {
+    file_path: PathBuf,
     root: Node,
 }
 
-impl<'a> Changelog<'a> {
-    pub fn new(file_path: &'a Path) -> Self {
-        let contents = std::fs::read_to_string(&file_path)
-            .unwrap_or_else(|_| include_str!("./fixtures/changelog.md").to_string());
+impl Changelog {
+    pub fn new(pwd: &str, filename: &str) -> Self {
+        let pwd = std::fs::canonicalize(pwd).expect("File path doesn't seem to exist");
+        let file_path = pwd.join(filename);
+
+        let contents = std::fs::read_to_string(&file_path).unwrap_or_else(|_| {
+            let date = Local::now().format("%Y-%m-%d");
+
+            let repo = Repo::from_git_repo(pwd.to_str().unwrap());
+
+            include_str!("./fixtures/changelog.md")
+                .to_string()
+                .replace("<date>", &date.to_string())
+                .replace("<owner>", &repo.org)
+                .replace("<repo>", &repo.repo)
+        });
         let root: Node = contents.parse().expect("Failed to parse changelog file");
 
         Changelog { file_path, root }
@@ -45,7 +58,7 @@ impl<'a> Changelog<'a> {
     }
 
     pub fn persist(&self) -> Result<(), std::io::Error> {
-        std::fs::write(self.file_path, self.root.to_string() + "\n")
+        std::fs::write(&self.file_path, self.root.to_string() + "\n")
     }
 
     pub fn find_latest_version(&self) -> Option<&str> {

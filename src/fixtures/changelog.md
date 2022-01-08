@@ -9,3 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Nothing yet!
 
+## [0.1.0] - <date>
+
+### Added
+
+- Everything!
+
+[unreleased]: https://github.com/<owner>/<repo>/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/<owner>/<repo>/releases/tag/v0.1.0
+
