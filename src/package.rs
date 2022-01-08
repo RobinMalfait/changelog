@@ -30,8 +30,8 @@ impl FromStr for SemVer {
 
                 Ok(SemVer {
                     major: pkg.version.major + 1,
-                    minor: pkg.version.minor,
-                    patch: pkg.version.patch,
+                    minor: 0,
+                    patch: 0,
                 })
             }
             "minor" => {
@@ -40,7 +40,7 @@ impl FromStr for SemVer {
                 Ok(SemVer {
                     major: pkg.version.major,
                     minor: pkg.version.minor + 1,
-                    patch: pkg.version.patch,
+                    patch: 0,
                 })
             }
             "patch" => {
