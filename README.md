@@ -44,6 +44,15 @@ Every command has the following options:
     --pwd <PWD>              The current working directory [default: .]
 ```
 
+### Initiliazing a new `CHANGELOG.md` file
+
+This will create a new CHANGELOG.md file if it doesn't already exist. It will
+also take the shared options into account from above.
+
+```sh
+changelog init
+```
+
 ### Adding new entries to the `CHANGELOG.md` file
 
 Every command behaves exactly the same and will add a new entry to the

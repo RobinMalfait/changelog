@@ -31,6 +31,9 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Initialize a new CHANGELOG.md file, if it doesn't exist yet
+    Init,
+
     /// Add a new entry to the changelog in the "Added" section
     #[clap(setting(AppSettings::ArgRequiredElseHelp))]
     Add {
@@ -135,7 +138,7 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), std::io::Error> {
     let args = Cli::parse();
 
     let pwd = std::fs::canonicalize(&args.pwd).expect("File path doesn't seem to exist");
@@ -144,6 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut changelog = Changelog::new(&file_path);
 
     match &args.command {
+        Commands::Init => changelog.init(),
         Commands::Add {
             link,
             message,
@@ -170,18 +174,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             name,
         } => {
             if let Some(link) = link {
-                let data: GitHubInfo = link.parse()?;
+                let data: GitHubInfo = link.parse().unwrap();
                 changelog.add_list_item_to_section(name, data.to_string());
             } else if let Some(message) = message {
                 changelog.add_list_item_to_section(name, message.to_string());
             }
 
-            changelog.persist()?;
+            changelog.persist()
         }
         Commands::Notes { version } => changelog.notes(version),
         Commands::Release { version } => changelog.release(version),
         Commands::List { amount, all } => changelog.list(amount, all),
-    };
-
-    Ok(())
+    }
 }

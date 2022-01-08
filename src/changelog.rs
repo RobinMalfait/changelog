@@ -5,7 +5,7 @@ use chrono::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 
-const UNRELEASED_NAME: &str = "unreleased";
+const UNRELEASED: &str = "unreleased";
 
 #[derive(Debug, Clone)]
 pub struct Changelog<'a> {
@@ -15,10 +15,28 @@ pub struct Changelog<'a> {
 
 impl<'a> Changelog<'a> {
     pub fn new(file_path: &'a Path) -> Self {
-        let contents = std::fs::read_to_string(&file_path).expect("Failed to read changelog file");
+        let contents = std::fs::read_to_string(&file_path)
+            .unwrap_or_else(|_| include_str!("./fixtures/changelog.md").to_string());
         let root: Node = contents.parse().expect("Failed to parse changelog file");
 
         Changelog { file_path, root }
+    }
+
+    pub fn init(&self) -> Result<(), std::io::Error> {
+        let meta = std::fs::metadata(&self.file_path);
+
+        if meta.is_ok() {
+            eprintln!("Changelog already exists at: {}", self.file_path.display());
+
+            Ok(())
+        } else {
+            println!(
+                "Created new changelog file at: {}",
+                self.file_path.display()
+            );
+
+            self.persist()
+        }
     }
 
     pub fn persist(&self) -> Result<(), std::io::Error> {
@@ -28,7 +46,7 @@ impl<'a> Changelog<'a> {
     pub fn find_latest_version(&self) -> Option<&str> {
         if let Some(node) = self.root.find_node(&|node| {
             if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                !name.eq_ignore_ascii_case(UNRELEASED_NAME)
+                !name.eq_ignore_ascii_case(UNRELEASED)
             } else {
                 false
             }
@@ -45,7 +63,7 @@ impl<'a> Changelog<'a> {
     pub fn add_list_item_to_section(&mut self, section_name: &str, item: String) {
         let unreleased = self.root.find_node_mut(&|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
-                name == UNRELEASED_NAME
+                name == UNRELEASED
             } else {
                 false
             }
@@ -98,7 +116,7 @@ impl<'a> Changelog<'a> {
                 unreleased.add_child(h3);
             }
         } else {
-            let mut section = Node::from_token(MarkdownToken::H2(UNRELEASED_NAME.to_string()));
+            let mut section = Node::from_token(MarkdownToken::H2(UNRELEASED.to_string()));
             let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
             let li = Node::from_token(MarkdownToken::ListItem(item));
@@ -122,7 +140,7 @@ impl<'a> Changelog<'a> {
                 match name {
                     Some(name) => {
                         if name.eq_ignore_ascii_case("latest") {
-                            !section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_NAME))
+                            !section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED))
                         } else {
                             section_name
                                 .to_lowercase()
@@ -130,7 +148,7 @@ impl<'a> Changelog<'a> {
                         }
                     }
                     None => {
-                        if section_name.eq_ignore_ascii_case(UNRELEASED_NAME) {
+                        if section_name.eq_ignore_ascii_case(UNRELEASED) {
                             node.find_node(&|node| matches!(&node.data, Some(MarkdownToken::H3(_))))
                                 .is_some()
                         } else {
@@ -153,7 +171,7 @@ impl<'a> Changelog<'a> {
         }
     }
 
-    pub fn notes(&self, version: &Option<String>) {
+    pub fn notes(&self, version: &Option<String>) -> Result<(), std::io::Error> {
         if let Some(node) = self.get_contents_of_section(version) {
             print!("{}", node);
         } else {
@@ -166,9 +184,11 @@ impl<'a> Changelog<'a> {
                 }
             }
         }
+
+        Ok(())
     }
 
-    pub fn list(&self, amount: &Amount, all: &bool) {
+    pub fn list(&self, amount: &Amount, all: &bool) -> Result<(), std::io::Error> {
         let references = self
             .root
             .filter_nodes(&|node| matches!(&node.data, Some(MarkdownToken::Reference(_, _))))
@@ -189,14 +209,16 @@ impl<'a> Changelog<'a> {
             .join("\n");
 
         println!("{}", references);
+
+        Ok(())
     }
 
-    pub fn release(&mut self, version: &SemVer) {
+    pub fn release(&mut self, version: &SemVer) -> Result<(), std::io::Error> {
         let date = Local::now().format("%Y-%m-%d");
 
         if let Some(unreleased) = self.root.find_node_mut(&|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
-                name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_NAME))
+                name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED))
             } else {
                 false
             }
@@ -206,7 +228,7 @@ impl<'a> Changelog<'a> {
 
             // Insert new [Unreleased] section at the top
             let mut new_unreleased =
-                Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED_NAME)));
+                Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED)));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
             let li = Node::from_token(MarkdownToken::ListItem("Nothing yet!".to_string()));
 
@@ -227,7 +249,7 @@ impl<'a> Changelog<'a> {
 
             if let Some(unreleased_reference) = self.root.find_node_mut(&|node| {
                 if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                    name.eq_ignore_ascii_case(UNRELEASED_NAME)
+                    name.eq_ignore_ascii_case(UNRELEASED)
                 } else {
                     false
                 }
@@ -248,7 +270,7 @@ impl<'a> Changelog<'a> {
 
                     match self.root.children.iter().position(|node| {
                         if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                            name.eq_ignore_ascii_case(UNRELEASED_NAME)
+                            name.eq_ignore_ascii_case(UNRELEASED)
                         } else {
                             false
                         }
@@ -264,7 +286,7 @@ impl<'a> Changelog<'a> {
             }
         }
 
-        self.persist().expect("Failed to persist changelog");
+        self.persist()
     }
 }
 
