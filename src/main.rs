@@ -205,7 +205,10 @@ async fn main() -> Result<(), std::io::Error> {
             changelog.persist()
         }
         Commands::Notes { version } => changelog.notes(version),
-        Commands::Release { version } => changelog.release(version),
+        Commands::Release { version } => {
+            output(format!("Releasing {}", version.to_string().green().bold()));
+            changelog.release(version)
+        }
         Commands::List { amount, all } => changelog.list(amount, all),
     }
 }
