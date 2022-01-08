@@ -5,7 +5,7 @@ use chrono::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 
-const UNRELEASED: &str = "unreleased";
+const UNRELEASED_HEADING: &str = "Unreleased";
 
 #[derive(Debug, Clone)]
 pub struct Changelog<'a> {
@@ -46,7 +46,7 @@ impl<'a> Changelog<'a> {
     pub fn find_latest_version(&self) -> Option<&str> {
         if let Some(node) = self.root.find_node(&|node| {
             if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                !name.eq_ignore_ascii_case(UNRELEASED)
+                !name.eq_ignore_ascii_case(UNRELEASED_HEADING)
             } else {
                 false
             }
@@ -63,7 +63,7 @@ impl<'a> Changelog<'a> {
     pub fn add_list_item_to_section(&mut self, section_name: &str, item: String) {
         let unreleased = self.root.find_node_mut(&|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
-                name == UNRELEASED
+                name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
             } else {
                 false
             }
@@ -116,7 +116,8 @@ impl<'a> Changelog<'a> {
                 unreleased.add_child(h3);
             }
         } else {
-            let mut section = Node::from_token(MarkdownToken::H2(UNRELEASED.to_string()));
+            let mut section =
+                Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED_HEADING)));
             let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
             let li = Node::from_token(MarkdownToken::ListItem(item));
@@ -140,7 +141,7 @@ impl<'a> Changelog<'a> {
                 match name {
                     Some(name) => {
                         if name.eq_ignore_ascii_case("latest") {
-                            !section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED))
+                            !section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
                         } else {
                             section_name
                                 .to_lowercase()
@@ -148,7 +149,7 @@ impl<'a> Changelog<'a> {
                         }
                     }
                     None => {
-                        if section_name.eq_ignore_ascii_case(UNRELEASED) {
+                        if section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING)) {
                             node.find_node(&|node| matches!(&node.data, Some(MarkdownToken::H3(_))))
                                 .is_some()
                         } else {
@@ -218,7 +219,7 @@ impl<'a> Changelog<'a> {
 
         if let Some(unreleased) = self.root.find_node_mut(&|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
-                name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED))
+                name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
             } else {
                 false
             }
@@ -228,7 +229,7 @@ impl<'a> Changelog<'a> {
 
             // Insert new [Unreleased] section at the top
             let mut new_unreleased =
-                Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED)));
+                Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED_HEADING)));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
             let li = Node::from_token(MarkdownToken::ListItem("Nothing yet!".to_string()));
 
@@ -249,7 +250,7 @@ impl<'a> Changelog<'a> {
 
             if let Some(unreleased_reference) = self.root.find_node_mut(&|node| {
                 if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                    name.eq_ignore_ascii_case(UNRELEASED)
+                    name.eq_ignore_ascii_case(UNRELEASED_HEADING)
                 } else {
                     false
                 }
@@ -270,7 +271,7 @@ impl<'a> Changelog<'a> {
 
                     match self.root.children.iter().position(|node| {
                         if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                            name.eq_ignore_ascii_case(UNRELEASED)
+                            name.eq_ignore_ascii_case(UNRELEASED_HEADING)
                         } else {
                             false
                         }
