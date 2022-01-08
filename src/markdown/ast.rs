@@ -2,9 +2,6 @@ use crate::MarkdownToken;
 use std::fmt::Display;
 use std::str::FromStr;
 
-pub const UNRELEASED_HEADING: &str = "[Unreleased]";
-pub const NEXT_OR_LATEST: &str = "next_or_latest";
-
 #[derive(Debug, Clone)]
 pub struct Node {
     pub data: Option<MarkdownToken>,
@@ -28,88 +25,14 @@ impl Node {
         self.children.insert(index, child);
     }
 
-    pub fn rename(&mut self, new_name: &str) {
+    pub fn rename_heading(&mut self, name: &str) {
         match self.data {
             Some(MarkdownToken::H1(ref mut heading))
             | Some(MarkdownToken::H2(ref mut heading))
             | Some(MarkdownToken::H3(ref mut heading)) => {
-                *heading = new_name.to_string();
+                *heading = name.to_string();
             }
             _ => {}
-        }
-    }
-
-    // TODO: This is horrible... refactor this!
-    pub fn add_list_item_to_section(&mut self, section_name: &str, item: String) {
-        let unreleased = self.find_node_mut(&|node| {
-            if let Some(MarkdownToken::H2(name)) = &node.data {
-                name == UNRELEASED_HEADING
-            } else {
-                false
-            }
-        });
-
-        if let Some(unreleased) = unreleased {
-            // Search for the "Nothing yet!" note, and delete it if it exists.
-            let nothing_yet_ul = unreleased
-                .children
-                .iter_mut()
-                .position(|node| matches!(&node.data, Some(MarkdownToken::UnorderedList)));
-
-            if let Some(nothing_yet_ul) = nothing_yet_ul {
-                unreleased.children.remove(nothing_yet_ul);
-            }
-
-            let section = unreleased.find_node_mut(&|node| {
-                if let Some(MarkdownToken::H3(name)) = &node.data {
-                    name.eq_ignore_ascii_case(section_name)
-                } else {
-                    false
-                }
-            });
-
-            if let Some(section) = section {
-                let ul = section.find_node_mut(&|node| {
-                    matches!(&node.data, Some(MarkdownToken::UnorderedList))
-                });
-
-                if let Some(ul) = ul {
-                    let li = Node::from_token(MarkdownToken::ListItem(item));
-
-                    ul.add_child(li);
-                } else {
-                    let mut ul = Node::from_token(MarkdownToken::UnorderedList);
-                    let li = Node::from_token(MarkdownToken::ListItem(item));
-
-                    ul.add_child(li);
-
-                    section.add_child(ul);
-                }
-            } else {
-                let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
-                let mut ul = Node::from_token(MarkdownToken::UnorderedList);
-                let li = Node::from_token(MarkdownToken::ListItem(item));
-
-                ul.add_child(li);
-                h3.add_child(ul);
-
-                unreleased.add_child(h3);
-            }
-        } else {
-            let mut section = Node::from_token(MarkdownToken::H2(UNRELEASED_HEADING.to_string()));
-            let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
-            let mut ul = Node::from_token(MarkdownToken::UnorderedList);
-            let li = Node::from_token(MarkdownToken::ListItem(item));
-
-            ul.add_child(li);
-            h3.add_child(ul);
-            section.add_child(h3);
-
-            // Insert "Unreleased" section
-            self.children
-                .get_mut(0)
-                .expect("Couldn't find main heading, is your CHANGELOG.md formatted correctly?")
-                .add_child_at(2, section);
         }
     }
 
@@ -121,22 +44,6 @@ impl Node {
         for child in &self.children {
             if let Some(result) = child.find_node(predicate) {
                 return Some(result);
-            }
-        }
-
-        None
-    }
-
-    pub fn find_latest_version(&self) -> Option<&str> {
-        if let Some(node) = self.find_node(&|node| {
-            if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                !name.eq_ignore_ascii_case("unreleased")
-            } else {
-                false
-            }
-        }) {
-            if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                return Some(name);
             }
         }
 
@@ -191,38 +98,6 @@ impl Node {
         }
 
         result
-    }
-
-    pub fn get_contents_of_section(self, name: &str) -> Option<Node> {
-        let node = self.find_node(&|node| {
-            if let Some(MarkdownToken::H2(section_name)) = &node.data {
-                if name.eq_ignore_ascii_case(NEXT_OR_LATEST) {
-                    if section_name.eq_ignore_ascii_case(UNRELEASED_HEADING) {
-                        node.find_node(&|node| matches!(&node.data, Some(MarkdownToken::H3(_))))
-                            .is_some()
-                    } else {
-                        true
-                    }
-                } else if name.eq_ignore_ascii_case("latest") {
-                    !section_name.eq_ignore_ascii_case(UNRELEASED_HEADING)
-                } else {
-                    section_name
-                        .to_lowercase()
-                        .starts_with(&format!("[{}]", name.to_lowercase()))
-                }
-            } else {
-                false
-            }
-        });
-
-        if let Some(node) = node {
-            let mut copy = node.clone();
-            copy.data = None;
-
-            Some(copy)
-        } else {
-            None
-        }
     }
 }
 
