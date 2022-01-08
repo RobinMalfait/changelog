@@ -1,12 +1,12 @@
+mod amount;
 mod changelog;
-mod common;
 mod github;
 mod graphql;
 mod markdown;
 mod package;
 
+use crate::amount::Amount;
 use crate::changelog::Changelog;
-use crate::common::Amount;
 use clap::{AppSettings, Parser, Subcommand};
 use github::github_info::GitHubInfo;
 use markdown::ast::Node;
