@@ -1,4 +1,5 @@
 use crate::MarkdownToken;
+use color_eyre::eyre::Error;
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -9,6 +10,13 @@ pub struct Node {
 }
 
 impl Node {
+    pub fn empty() -> Self {
+        Node {
+            data: None,
+            children: vec![],
+        }
+    }
+
     pub fn new(data: Option<MarkdownToken>, children: Vec<Node>) -> Self {
         Node { data, children }
     }
@@ -116,7 +124,7 @@ impl Display for Node {
 }
 
 impl FromStr for Node {
-    type Err = String;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let tokens = MarkdownToken::lex(s);

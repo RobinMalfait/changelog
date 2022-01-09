@@ -177,13 +177,15 @@ async fn main() -> Result<()> {
             message,
             name,
         } => {
-            let message = if let Some(link) = link {
+            changelog.parse_contents()?;
+
+            let message = if let Some(message) = message {
+                changelog.add_list_item_to_section(name, message.to_string());
+                message.to_string()
+            } else if let Some(link) = link {
                 let data: GitHubInfo = link.parse().unwrap();
                 changelog.add_list_item_to_section(name, data.to_string());
                 data.to_string()
-            } else if let Some(message) = message {
-                changelog.add_list_item_to_section(name, message.to_string());
-                message.to_string()
             } else {
                 "".to_string()
             };
@@ -207,11 +209,11 @@ async fn main() -> Result<()> {
 
             changelog.persist()
         }
-        Commands::Notes { version } => changelog.notes(version),
+        Commands::Notes { version } => changelog.parse_contents()?.notes(version),
         Commands::Release { version } => {
             output(format!("Releasing {}", version.to_string().green().bold()));
-            changelog.release(version)
+            changelog.parse_contents()?.release(version)
         }
-        Commands::List { amount, all } => changelog.list(amount, all),
+        Commands::List { amount, all } => changelog.parse_contents()?.list(amount, all),
     }
 }

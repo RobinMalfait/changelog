@@ -28,6 +28,13 @@ impl Git {
         }
     }
 
+    pub fn is_git_repo(pwd: &str) -> bool {
+        match Self::exec(pwd, vec!["rev-parse", "--is-inside-work-tree"]) {
+            Ok(output) => output.trim() == "true",
+            Err(_) => false,
+        }
+    }
+
     pub fn exec(pwd: &str, args: Vec<&str>) -> Result<String> {
         let mut cmd = Command::new("git");
 

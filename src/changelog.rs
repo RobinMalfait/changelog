@@ -1,3 +1,4 @@
+use crate::git::Git;
 use crate::github::repo::Repo;
 use crate::output::output;
 use crate::MarkdownToken;
@@ -14,35 +15,43 @@ const UNRELEASED_HEADING: &str = "Unreleased";
 
 #[derive(Debug, Clone)]
 pub struct Changelog {
+    pwd: PathBuf,
     file_path: PathBuf,
+    filename: String,
     root: Node,
 }
 
 impl Changelog {
     pub fn new(pwd: &str, filename: &str) -> Result<Self> {
-        let pwd = fs::canonicalize(pwd).expect("File path doesn't seem to exist");
+        let pwd = fs::canonicalize(pwd)?;
         let file_path = pwd.join(filename);
 
-        let contents = match fs::read_to_string(&file_path) {
-            Ok(contents) => contents,
-            Err(_) => {
-                let date = Local::now().format("%Y-%m-%d");
-                let repo = Repo::from_git_repo(pwd.to_str().unwrap())?;
-
-                include_str!("./fixtures/changelog.md")
-                    .to_string()
-                    .replace("<date>", &date.to_string())
-                    .replace("<owner>", &repo.org)
-                    .replace("<repo>", &repo.repo)
-            }
-        };
-
-        let root: Node = contents.parse().expect("Failed to parse changelog file");
-
-        Ok(Changelog { file_path, root })
+        Ok(Changelog {
+            pwd,
+            file_path,
+            filename: filename.to_string(),
+            root: Node::empty(),
+        })
     }
 
-    pub fn init(&self) -> Result<()> {
+    pub fn parse_contents(&mut self) -> Result<&mut Self> {
+        let meta = fs::metadata(&self.file_path);
+        if meta.is_err() {
+            return Err(eyre!(
+                "Changelog file does not exist at '{}', run `changelog init` to initialize a new {} file",
+                self.file_path.display().to_string(),
+                self.filename
+            ));
+        }
+
+        let contents = fs::read_to_string(&self.file_path)?;
+        let root: Node = contents.parse()?;
+        self.root = root;
+
+        Ok(self)
+    }
+
+    pub fn init(&mut self) -> Result<()> {
         let meta = fs::metadata(&self.file_path);
 
         if meta.is_ok() {
@@ -53,6 +62,27 @@ impl Changelog {
 
             Ok(())
         } else {
+            if !Git::is_git_repo(self.pwd.to_str().unwrap()) {
+                output(format!(
+                    "Not a git repository: {}",
+                    self.pwd.to_str().unwrap().white().dimmed()
+                ));
+
+                return Ok(());
+            }
+
+            let date = Local::now().format("%Y-%m-%d");
+            let repo = Repo::from_git_repo(self.pwd.to_str().unwrap())?;
+
+            let root: Node = include_str!("./fixtures/changelog.md")
+                .to_string()
+                .replace("<date>", &date.to_string())
+                .replace("<owner>", &repo.org)
+                .replace("<repo>", &repo.repo)
+                .parse()?;
+
+            self.root = root;
+
             output(format!(
                 "Created new changelog file at: {}",
                 self.file_path.to_str().unwrap().white().dimmed()
