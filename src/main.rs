@@ -1,4 +1,5 @@
 mod changelog;
+mod git;
 mod github;
 mod graphql;
 mod markdown;

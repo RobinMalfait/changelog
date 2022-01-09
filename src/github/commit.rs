@@ -1,9 +1,9 @@
+use crate::git::Git;
 use crate::github::github_url::GitHubURL;
 use crate::github::repo::Repo;
 use crate::graphql::graphql;
 use serde_json::json;
 use std::fmt::{Debug, Display};
-use std::process::Command;
 use std::str::FromStr;
 
 #[derive(Debug)]
@@ -18,9 +18,9 @@ impl Commit {
     pub fn from_local_commit(pwd: &str, maybe_hash: &str) -> Result<Self, std::io::Error> {
         let repo = Repo::from_git_repo(pwd);
 
-        let long_hash = Commit::calculate_long_hash(pwd, maybe_hash)?;
-        let short_hash = Commit::calculate_short_hash(pwd, maybe_hash)?;
-        let title = Commit::calculate_commit_message(pwd, maybe_hash)?;
+        let long_hash = Git::long_hash(pwd, maybe_hash)?;
+        let short_hash = Git::short_hash(pwd, maybe_hash)?;
+        let title = Git::commit_message(pwd, maybe_hash)?;
 
         Ok(Self {
             hash: long_hash.to_string(),
@@ -28,53 +28,6 @@ impl Commit {
             title: title.to_string(),
             repo,
         })
-    }
-
-    pub fn calculate_long_hash(pwd: &str, hash: &str) -> Result<String, std::io::Error> {
-        Self::exec_git(pwd, vec!["log", "-1", "--format=%H", hash])
-    }
-
-    pub fn calculate_short_hash(pwd: &str, hash: &str) -> Result<String, std::io::Error> {
-        Self::exec_git(pwd, vec!["log", "-1", "--format=%S", hash])
-    }
-
-    pub fn calculate_commit_message(pwd: &str, hash: &str) -> Result<String, std::io::Error> {
-        match Self::exec_git(pwd, vec!["log", "-1", "--format=%B", hash]) {
-            Ok(msg) => {
-                if msg.is_empty() {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "No commit message found",
-                    ))
-                } else {
-                    let msg = msg.trim().split_once("\n").unwrap().0;
-
-                    Ok(msg.to_string())
-                }
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    fn exec_git(pwd: &str, args: Vec<&str>) -> Result<String, std::io::Error> {
-        let mut cmd = Command::new("git");
-
-        cmd.current_dir(pwd);
-
-        for arg in args {
-            cmd.arg(arg);
-        }
-
-        match cmd.output() {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stdout = stdout.trim();
-                let stdout = stdout.to_string();
-
-                Ok(stdout)
-            }
-            Err(e) => Err(e),
-        }
     }
 }
 
