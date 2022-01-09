@@ -234,10 +234,16 @@ impl Changelog {
         } else {
             match *version {
                 Some(ref version) => {
-                    output(format!("Couldn't find notes for version: {}", version));
+                    output(format!(
+                        "Couldn't find notes for version: {}",
+                        version.blue().bold()
+                    ));
                 }
                 None => {
-                    output("Couldn't find notes for version: <unknown>".to_string());
+                    output(format!(
+                        "Couldn't find notes for version: {}",
+                        "<unknown>".blue().bold()
+                    ));
                 }
             }
         }
