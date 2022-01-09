@@ -33,15 +33,21 @@ impl FromStr for GitHubInfo {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.contains("/commit/") || s.contains("/commits/") {
-            Ok(GitHubInfo::Commit(s.parse()?))
-        } else if s.contains("/pull/") || s.contains("/pulls/") {
-            Ok(GitHubInfo::PullRequest(s.parse()?))
-        } else if s.contains("/issue/") || s.contains("/issues/") {
-            Ok(GitHubInfo::Issue(s.parse()?))
-        } else if s.contains("/discussion/") || s.contains("/discussions/") {
-            Ok(GitHubInfo::Discussion(s.parse()?))
-        } else {
-            Err(format!("Invalid GitHub URL: {}", s))
+            return Ok(GitHubInfo::Commit(s.parse()?));
         }
+
+        if s.contains("/pull/") || s.contains("/pulls/") {
+            return Ok(GitHubInfo::PullRequest(s.parse()?));
+        }
+
+        if s.contains("/issue/") || s.contains("/issues/") {
+            return Ok(GitHubInfo::Issue(s.parse()?));
+        }
+
+        if s.contains("/discussion/") || s.contains("/discussions/") {
+            return Ok(GitHubInfo::Discussion(s.parse()?));
+        }
+
+        Ok(GitHubInfo::Commit(s.parse()?))
     }
 }
