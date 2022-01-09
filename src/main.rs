@@ -10,6 +10,7 @@ use crate::changelog::{Amount, Changelog};
 use crate::output::output;
 use crate::output::output_indented;
 use clap::{AppSettings, Parser, Subcommand};
+use color_eyre::eyre::Result;
 use colored::*;
 use github::github_info::GitHubInfo;
 use markdown::ast::Node;
@@ -143,10 +144,11 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), std::io::Error> {
+async fn main() -> Result<()> {
+    color_eyre::install()?;
     let args = Cli::parse();
 
-    let mut changelog = Changelog::new(&args.pwd, &args.filename);
+    let mut changelog = Changelog::new(&args.pwd, &args.filename)?;
 
     match &args.command {
         Commands::Init => changelog.init(),

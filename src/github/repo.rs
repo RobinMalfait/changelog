@@ -1,5 +1,5 @@
 use crate::git::Git;
-use crate::output::output;
+use color_eyre::eyre::{eyre, Result};
 
 #[derive(Debug)]
 pub struct Repo {
@@ -12,24 +12,25 @@ impl Repo {
         Self { org, repo }
     }
 
-    pub fn from_git_repo(pwd: &str) -> Self {
+    pub fn from_git_repo(pwd: &str) -> Result<Self> {
         match Git::exec(pwd, vec!["config", "--get", "remote.origin.url"]) {
             Ok(output) => {
                 let output = output.replace(".git", "");
 
-                let parts = output.split(':').collect::<Vec<&str>>()[1]
+                let parts = output
+                    .split(':')
+                    .collect::<Vec<&str>>()
+                    .pop()
+                    .unwrap()
                     .split('/')
                     .collect::<Vec<&str>>();
 
-                let owner = parts.get(0).unwrap().to_string();
-                let repo = parts.get(1).unwrap().to_string();
-
-                Self::new(owner, repo)
+                match (parts.get(0), parts.get(1)) {
+                    (Some(owner), Some(repo)) => Ok(Self::new(owner.to_string(), repo.to_string())),
+                    _ => Err(eyre!("Could not parse git remote url")),
+                }
             }
-            Err(e) => {
-                output(format!("Failed running git: {}", e.to_string()));
-                std::process::exit(1);
-            }
+            Err(e) => Err(eyre!(format!("Failed running git: {}", e.to_string()))),
         }
     }
 }

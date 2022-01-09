@@ -2,6 +2,7 @@ use crate::git::Git;
 use crate::github::github_url::GitHubURL;
 use crate::github::repo::Repo;
 use crate::graphql::graphql;
+use color_eyre::eyre::Result;
 use serde_json::json;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
@@ -15,8 +16,8 @@ pub struct Commit {
 }
 
 impl Commit {
-    pub fn from_local_commit(pwd: &str, maybe_hash: &str) -> Result<Self, std::io::Error> {
-        let repo = Repo::from_git_repo(pwd);
+    pub fn from_local_commit(pwd: &str, maybe_hash: &str) -> Result<Self> {
+        let repo = Repo::from_git_repo(pwd)?;
 
         let long_hash = Git::long_hash(pwd, maybe_hash)?;
         let short_hash = Git::short_hash(pwd, maybe_hash)?;

@@ -1,25 +1,23 @@
+use color_eyre::eyre::{eyre, Result};
 use std::process::Command;
 
 #[derive(Debug)]
 pub struct Git {}
 
 impl Git {
-    pub fn long_hash(pwd: &str, hash: &str) -> Result<String, std::io::Error> {
+    pub fn long_hash(pwd: &str, hash: &str) -> Result<String> {
         Self::exec(pwd, vec!["log", "-1", "--format=%H", hash])
     }
 
-    pub fn short_hash(pwd: &str, hash: &str) -> Result<String, std::io::Error> {
+    pub fn short_hash(pwd: &str, hash: &str) -> Result<String> {
         Self::exec(pwd, vec!["log", "-1", "--format=%S", hash])
     }
 
-    pub fn commit_message(pwd: &str, hash: &str) -> Result<String, std::io::Error> {
+    pub fn commit_message(pwd: &str, hash: &str) -> Result<String> {
         match Self::exec(pwd, vec!["log", "-1", "--format=%B", hash]) {
             Ok(msg) => {
                 if msg.is_empty() {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "No commit message found",
-                    ))
+                    Err(eyre!("No commit message found"))
                 } else {
                     let msg = msg.trim().split_once("\n").unwrap().0;
 
@@ -30,7 +28,7 @@ impl Git {
         }
     }
 
-    pub fn exec(pwd: &str, args: Vec<&str>) -> Result<String, std::io::Error> {
+    pub fn exec(pwd: &str, args: Vec<&str>) -> Result<String> {
         let mut cmd = Command::new("git");
 
         cmd.current_dir(pwd);
@@ -47,7 +45,7 @@ impl Git {
 
                 Ok(stdout)
             }
-            Err(e) => Err(e),
+            Err(e) => Err(eyre!(e)),
         }
     }
 }

@@ -1,12 +1,11 @@
-use crate::output::output;
+use color_eyre::eyre::{eyre, Error, Result};
 use colored::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use std::fs::File;
 use std::str::FromStr;
 
 /// Semantic Versioning 2.0.0: https://semver.org
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SemVer {
     /// Version when you make incompatible API changes
     major: u64,
@@ -35,22 +34,20 @@ impl Display for SemVer {
 }
 
 impl FromStr for SemVer {
-    type Err = String;
+    type Err = Error;
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "major" => {
-                let pkg = PackageJSON::read("./package.json");
-
+                let pkg = PackageJSON::read("./package.json")?;
                 Ok(Self::new(pkg.version.major + 1, 0, 0))
             }
             "minor" => {
-                let pkg = PackageJSON::read("./package.json");
-
+                let pkg = PackageJSON::read("./package.json")?;
                 Ok(Self::new(pkg.version.major, pkg.version.minor + 1, 0))
             }
             "patch" => {
-                let pkg = PackageJSON::read("./package.json");
-
+                let pkg = PackageJSON::read("./package.json")?;
                 Ok(Self::new(
                     pkg.version.major,
                     pkg.version.minor,
@@ -58,28 +55,28 @@ impl FromStr for SemVer {
                 ))
             }
             "infer" => {
-                let pkg = PackageJSON::read("./package.json");
+                let pkg = PackageJSON::read("./package.json")?;
                 Ok(pkg.version)
             }
             _ => {
                 let mut parts = s.split('.');
-                let major = parts
-                    .next()
-                    .ok_or_else(|| "Major version is required".to_string())?
-                    .parse()
-                    .map_err(|_| "Major version must be an integer".to_string())?;
 
-                let minor = parts
-                    .next()
-                    .ok_or_else(|| "Minor version is required".to_string())?
-                    .parse()
-                    .map_err(|_| "Minor version must be an integer".to_string())?;
-
-                let patch = parts
-                    .next()
-                    .ok_or_else(|| "Patch version is required".to_string())?
-                    .parse()
-                    .map_err(|_| "Patch version must be an integer".to_string())?;
+                let (major, minor, patch) = match (parts.next(), parts.next(), parts.next()) {
+                    (Some(major), Some(minor), Some(patch)) => (
+                        major.parse::<u64>()?,
+                        minor.parse::<u64>()?,
+                        patch.parse::<u64>()?,
+                    ),
+                    (None, _, _) => {
+                        return Err(eyre!("{} version is missing", "major".blue().bold()))
+                    }
+                    (_, None, _) => {
+                        return Err(eyre!("{} version is missing", "minor".blue().bold()))
+                    }
+                    (_, _, None) => {
+                        return Err(eyre!("{} version is missing", "patch".blue().bold()))
+                    }
+                };
 
                 Ok(Self::new(major, minor, patch))
             }
@@ -87,44 +84,27 @@ impl FromStr for SemVer {
     }
 }
 
-impl<'de> Deserialize<'de> for SemVer {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PackageJSON {
-    name: String,
     version: SemVer,
 }
 
 impl PackageJSON {
-    fn read(path: &str) -> PackageJSON {
-        match File::open(path) {
-            Ok(file) => match serde_json::from_reader(file) {
-                Ok(pkg) => pkg,
-                Err(e) => {
-                    output(format!(
-                        "Error while reading {}: {}",
-                        "package.json".blue(),
-                        e.to_string().red()
-                    ));
-                    std::process::exit(1);
-                }
-            },
-            Err(e) => {
-                output(format!(
+    fn read(path: &str) -> Result<PackageJSON> {
+        match std::fs::read_to_string(path) {
+            Ok(contents) => match serde_json::from_str::<PackageJSON>(&contents) {
+                Ok(pkg) => Ok(pkg),
+                Err(e) => Err(eyre!(format!(
                     "Error while reading {}: {}",
                     "package.json".blue(),
                     e.to_string().red()
-                ));
-                std::process::exit(1);
-            }
+                ))),
+            },
+            Err(e) => Err(eyre!(format!(
+                "Error while reading {}: {}",
+                "package.json".blue(),
+                e.to_string().red()
+            ))),
         }
     }
 }

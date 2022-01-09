@@ -4,7 +4,9 @@ use crate::MarkdownToken;
 use crate::Node;
 use crate::SemVer;
 use chrono::prelude::*;
+use color_eyre::eyre::{eyre, Result};
 use colored::*;
+use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -17,28 +19,31 @@ pub struct Changelog {
 }
 
 impl Changelog {
-    pub fn new(pwd: &str, filename: &str) -> Self {
-        let pwd = std::fs::canonicalize(pwd).expect("File path doesn't seem to exist");
+    pub fn new(pwd: &str, filename: &str) -> Result<Self> {
+        let pwd = fs::canonicalize(pwd).expect("File path doesn't seem to exist");
         let file_path = pwd.join(filename);
 
-        let contents = std::fs::read_to_string(&file_path).unwrap_or_else(|_| {
-            let date = Local::now().format("%Y-%m-%d");
+        let contents = match fs::read_to_string(&file_path) {
+            Ok(contents) => contents,
+            Err(_) => {
+                let date = Local::now().format("%Y-%m-%d");
+                let repo = Repo::from_git_repo(pwd.to_str().unwrap())?;
 
-            let repo = Repo::from_git_repo(pwd.to_str().unwrap());
+                include_str!("./fixtures/changelog.md")
+                    .to_string()
+                    .replace("<date>", &date.to_string())
+                    .replace("<owner>", &repo.org)
+                    .replace("<repo>", &repo.repo)
+            }
+        };
 
-            include_str!("./fixtures/changelog.md")
-                .to_string()
-                .replace("<date>", &date.to_string())
-                .replace("<owner>", &repo.org)
-                .replace("<repo>", &repo.repo)
-        });
         let root: Node = contents.parse().expect("Failed to parse changelog file");
 
-        Changelog { file_path, root }
+        Ok(Changelog { file_path, root })
     }
 
-    pub fn init(&self) -> Result<(), std::io::Error> {
-        let meta = std::fs::metadata(&self.file_path);
+    pub fn init(&self) -> Result<()> {
+        let meta = fs::metadata(&self.file_path);
 
         if meta.is_ok() {
             output(format!(
@@ -57,8 +62,11 @@ impl Changelog {
         }
     }
 
-    pub fn persist(&self) -> Result<(), std::io::Error> {
-        std::fs::write(&self.file_path, self.root.to_string() + "\n")
+    pub fn persist(&self) -> Result<()> {
+        match fs::write(&self.file_path, self.root.to_string() + "\n") {
+            Ok(_) => Ok(()),
+            Err(e) => Err(eyre!(e)),
+        }
     }
 
     pub fn find_latest_version(&self) -> Option<&str> {
@@ -190,7 +198,7 @@ impl Changelog {
         }
     }
 
-    pub fn notes(&self, version: &Option<String>) -> Result<(), std::io::Error> {
+    pub fn notes(&self, version: &Option<String>) -> Result<()> {
         if let Some(node) = self.get_contents_of_section(version) {
             output(node.to_string());
         } else {
@@ -207,7 +215,7 @@ impl Changelog {
         Ok(())
     }
 
-    pub fn list(&self, amount: &Amount, all: &bool) -> Result<(), std::io::Error> {
+    pub fn list(&self, amount: &Amount, all: &bool) -> Result<()> {
         let releases = self
             .root
             .filter_nodes(&|node| matches!(&node.data, Some(MarkdownToken::Reference(_, _))))
@@ -236,7 +244,7 @@ impl Changelog {
         Ok(())
     }
 
-    pub fn release(&mut self, version: &SemVer) -> Result<(), std::io::Error> {
+    pub fn release(&mut self, version: &SemVer) -> Result<()> {
         let date = Local::now().format("%Y-%m-%d");
 
         if let Some(unreleased) = self.root.find_node_mut(&|node| {
@@ -311,11 +319,9 @@ impl Changelog {
                     }
                 }
                 None => {
-                    output(
+                    return Err(eyre!(
                         "Couldn't find latest version, is your CHANGELOG.md formatted correctly?"
-                            .to_string(),
-                    );
-                    std::process::exit(1);
+                    ));
                 }
             }
         }
