@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 /// Semantic Versioning 2.0.0: https://semver.org
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 pub struct SemVer {
     /// Version when you make incompatible API changes
     major: u64,
@@ -81,6 +81,16 @@ impl FromStr for SemVer {
                 Ok(Self::new(major, minor, patch))
             }
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for SemVer {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 
