@@ -19,7 +19,7 @@ impl Git {
                 if msg.is_empty() {
                     Err(eyre!("No commit message found"))
                 } else {
-                    let msg = msg.trim().split_once("\n").unwrap().0;
+                    let msg = msg.trim().split('\n').next().unwrap_or(&msg);
 
                     Ok(msg.to_string())
                 }
