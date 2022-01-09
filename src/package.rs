@@ -5,16 +5,27 @@ use std::fmt::Display;
 use std::fs::File;
 use std::str::FromStr;
 
+/// Semantic Versioning 2.0.0: https://semver.org
 #[derive(Serialize, Debug)]
 pub struct SemVer {
-    /// The major version
+    /// Version when you make incompatible API changes
     major: u64,
 
-    /// The minor version
+    /// Version when you add functionality in a backwards compatible manner
     minor: u64,
 
-    /// The patch version
+    /// Version when you make backwards compatible bug fixes
     patch: u64,
+}
+
+impl SemVer {
+    pub fn new(major: u64, minor: u64, patch: u64) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+        }
+    }
 }
 
 impl Display for SemVer {
@@ -30,29 +41,21 @@ impl FromStr for SemVer {
             "major" => {
                 let pkg = PackageJSON::read("./package.json");
 
-                Ok(SemVer {
-                    major: pkg.version.major + 1,
-                    minor: 0,
-                    patch: 0,
-                })
+                Ok(Self::new(pkg.version.major + 1, 0, 0))
             }
             "minor" => {
                 let pkg = PackageJSON::read("./package.json");
 
-                Ok(SemVer {
-                    major: pkg.version.major,
-                    minor: pkg.version.minor + 1,
-                    patch: 0,
-                })
+                Ok(Self::new(pkg.version.major, pkg.version.minor + 1, 0))
             }
             "patch" => {
                 let pkg = PackageJSON::read("./package.json");
 
-                Ok(SemVer {
-                    major: pkg.version.major,
-                    minor: pkg.version.minor,
-                    patch: pkg.version.patch + 1,
-                })
+                Ok(Self::new(
+                    pkg.version.major,
+                    pkg.version.minor,
+                    pkg.version.patch + 1,
+                ))
             }
             "infer" => {
                 let pkg = PackageJSON::read("./package.json");
@@ -78,11 +81,7 @@ impl FromStr for SemVer {
                     .parse()
                     .map_err(|_| "Patch version must be an integer".to_string())?;
 
-                Ok(SemVer {
-                    major,
-                    minor,
-                    patch,
-                })
+                Ok(Self::new(major, minor, patch))
             }
         }
     }
