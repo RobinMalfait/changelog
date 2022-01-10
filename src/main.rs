@@ -187,7 +187,26 @@ async fn main() -> Result<()> {
                 changelog.add_list_item_to_section(name, data.to_string());
                 data.to_string()
             } else {
-                "".to_string()
+                output(format!(
+                    "No {}, {} or {} provided, run `{}` for more info",
+                    "<LINK>".blue().bold(),
+                    "<COMMIT HASH>".blue().bold(),
+                    "--message".blue().bold(),
+                    format!(
+                        "changelog {} --help",
+                        match &args.command {
+                            Commands::Add { .. } => "add",
+                            Commands::Fix { .. } => "fix",
+                            Commands::Change { .. } => "change",
+                            Commands::Remove { .. } => "remove",
+                            Commands::Deprecate { .. } => "deprecate",
+                            _ => unreachable!(),
+                        }
+                    )
+                    .blue()
+                    .bold()
+                ));
+                std::process::exit(1);
             };
 
             output(format!(
