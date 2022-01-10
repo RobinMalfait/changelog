@@ -10,15 +10,12 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn empty() -> Self {
-        Node {
-            data: None,
-            children: vec![],
-        }
-    }
-
     pub fn new(data: Option<MarkdownToken>, children: Vec<Node>) -> Self {
         Node { data, children }
+    }
+
+    pub fn empty() -> Self {
+        Node::new(None, vec![])
     }
 
     pub fn from_token(token: MarkdownToken) -> Self {
@@ -44,7 +41,11 @@ impl Node {
         }
     }
 
-    pub fn find_node<'a>(&'a self, predicate: &dyn Fn(&Node) -> bool) -> Option<&'a Node> {
+    pub fn find_node<'a, F>(&'a self, predicate: F) -> Option<&'a Node>
+    where
+        Self: Sized,
+        F: Fn(&'a Node) -> bool + Copy,
+    {
         if predicate(self) {
             return Some(self);
         }
@@ -58,7 +59,11 @@ impl Node {
         None
     }
 
-    pub fn find_node_mut(&mut self, predicate: &dyn Fn(&Node) -> bool) -> Option<&mut Node> {
+    pub fn find_node_mut<F>(&mut self, predicate: F) -> Option<&mut Node>
+    where
+        Self: Sized,
+        F: Fn(&Node) -> bool + Copy,
+    {
         if predicate(self) {
             return Some(self);
         }
@@ -72,7 +77,11 @@ impl Node {
         None
     }
 
-    pub fn filter_nodes<'a>(&'a self, predicate: &dyn Fn(&'a Node) -> bool) -> Vec<&'a Node> {
+    pub fn filter_nodes<'a, F>(&'a self, predicate: F) -> Vec<&'a Node>
+    where
+        Self: Sized,
+        F: Fn(&'a Node) -> bool + Copy,
+    {
         let mut result: Vec<&'a Node> = vec![];
 
         if predicate(self) {

@@ -100,7 +100,7 @@ impl Changelog {
     }
 
     pub fn find_latest_version(&self) -> Option<&str> {
-        if let Some(node) = self.root.find_node(&|node| {
+        if let Some(node) = self.root.find_node(|node| {
             if let Some(MarkdownToken::Reference(name, _)) = &node.data {
                 !name.eq_ignore_ascii_case(UNRELEASED_HEADING)
             } else {
@@ -117,7 +117,7 @@ impl Changelog {
 
     // TODO: This is horrible... refactor this!
     pub fn add_list_item_to_section(&mut self, section_name: &str, item: String) {
-        let unreleased = self.root.find_node_mut(&|node| {
+        let unreleased = self.root.find_node_mut(|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
                 name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
             } else {
@@ -136,7 +136,7 @@ impl Changelog {
                 unreleased.children.remove(nothing_yet_ul);
             }
 
-            let section = unreleased.find_node_mut(&|node| {
+            let section = unreleased.find_node_mut(|node| {
                 if let Some(MarkdownToken::H3(name)) = &node.data {
                     name.eq_ignore_ascii_case(section_name)
                 } else {
@@ -145,9 +145,8 @@ impl Changelog {
             });
 
             if let Some(section) = section {
-                let ul = section.find_node_mut(&|node| {
-                    matches!(&node.data, Some(MarkdownToken::UnorderedList))
-                });
+                let ul = section
+                    .find_node_mut(|node| matches!(&node.data, Some(MarkdownToken::UnorderedList)));
 
                 if let Some(ul) = ul {
                     let li = Node::from_token(MarkdownToken::ListItem(item));
@@ -192,7 +191,7 @@ impl Changelog {
     }
 
     pub fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
-        let node = self.root.find_node(&|node| {
+        let node = self.root.find_node(|node| {
             if let Some(MarkdownToken::H2(section_name)) = &node.data {
                 match name {
                     Some(name) => {
@@ -206,7 +205,7 @@ impl Changelog {
                     }
                     None => {
                         if section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING)) {
-                            node.find_node(&|node| matches!(&node.data, Some(MarkdownToken::H3(_))))
+                            node.find_node(|node| matches!(&node.data, Some(MarkdownToken::H3(_))))
                                 .is_some()
                         } else {
                             true
@@ -254,7 +253,7 @@ impl Changelog {
     pub fn list(&self, amount: &Amount, all: &bool) -> Result<()> {
         let releases = self
             .root
-            .filter_nodes(&|node| matches!(&node.data, Some(MarkdownToken::Reference(_, _))))
+            .filter_nodes(|node| matches!(&node.data, Some(MarkdownToken::Reference(_, _))))
             .iter()
             .filter_map(|node| node.data.as_ref())
             .take(match all {
@@ -283,7 +282,7 @@ impl Changelog {
     pub fn release(&mut self, version: &SemVer) -> Result<()> {
         let date = Local::now().format("%Y-%m-%d");
 
-        if let Some(unreleased) = self.root.find_node_mut(&|node| {
+        if let Some(unreleased) = self.root.find_node_mut(|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
                 name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
             } else {
@@ -312,7 +311,7 @@ impl Changelog {
             let c = self.clone();
             match c.find_latest_version() {
                 Some(old_version) => {
-                    if let Some(unreleased_reference) = self.root.find_node_mut(&|node| {
+                    if let Some(unreleased_reference) = self.root.find_node_mut(|node| {
                         if let Some(MarkdownToken::Reference(name, _)) = &node.data {
                             name.eq_ignore_ascii_case(UNRELEASED_HEADING)
                         } else {
