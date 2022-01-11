@@ -13,7 +13,7 @@ impl Repo {
     }
 
     pub fn from_git_repo(pwd: &str) -> Result<Self> {
-        match Git::exec(pwd, vec!["config", "--get", "remote.origin.url"]) {
+        match Git::new(Some(pwd))?.exec(vec!["config", "--get", "remote.origin.url"]) {
             Ok(output) => {
                 let output = output.replace(".git", "");
 

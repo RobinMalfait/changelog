@@ -34,6 +34,10 @@ impl Changelog {
         })
     }
 
+    pub fn file_path_str(&self) -> &str {
+        self.file_path.to_str().unwrap()
+    }
+
     pub fn parse_contents(&mut self) -> Result<&mut Self> {
         let meta = fs::metadata(&self.file_path);
         if meta.is_err() {
@@ -57,12 +61,12 @@ impl Changelog {
         if meta.is_ok() {
             output(format!(
                 "Changelog already exists at: {}",
-                self.file_path.to_str().unwrap().white().dimmed()
+                self.file_path_str().white().dimmed()
             ));
 
             Ok(())
         } else {
-            if !Git::is_git_repo(self.pwd.to_str().unwrap()) {
+            if !Git::new(Some(self.pwd.to_str().unwrap()))?.is_git_repo() {
                 output(format!(
                     "Not a git repository: {}",
                     self.pwd.to_str().unwrap().white().dimmed()

@@ -133,3 +133,11 @@ We have different strategies for releasing:
   version from `package.json`, and increase the `patch` part of the semver.
 - `<explicit>` when you run `changelog release 3.0.2`, then we use the semver
   you provided.
+
+You can also add the `--with-npm` flag, this will:
+
+- Run `git add <changelog-file.md> && git commit -m "update changelog"`
+- Run `npm version <version>`
+  - This will update the `package.json` file with the new version
+  - This will also create a git tag 
+

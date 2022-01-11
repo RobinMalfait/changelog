@@ -3,10 +3,13 @@ mod git;
 mod github;
 mod graphql;
 mod markdown;
+mod npm;
 mod output;
 mod package;
 
 use crate::changelog::{Amount, Changelog};
+use crate::git::Git;
+use crate::npm::NPM;
 use crate::output::output;
 use crate::output::output_indented;
 use clap::{AppSettings, Parser, Subcommand};
@@ -122,6 +125,11 @@ enum Commands {
         /// (infer from current package.json version) or an explicit version number like "1.2.3"
         #[clap(default_value = "infer")]
         version: SemVer,
+
+        /// Whether or not to run `npm version <version>` (which in turn updates package.json and
+        /// creates a new git tag)
+        #[clap(long)]
+        with_npm: bool,
     },
 
     /// Get the release notes of a specific version (or unreleased)
@@ -229,9 +237,21 @@ async fn main() -> Result<()> {
             changelog.persist()
         }
         Commands::Notes { version } => changelog.parse_contents()?.notes(version),
-        Commands::Release { version } => {
+        Commands::Release { version, with_npm } => {
             output(format!("Releasing {}", version.to_string().green().bold()));
-            changelog.parse_contents()?.release(version)
+            changelog.parse_contents()?.release(version)?;
+
+            if *with_npm {
+                // Commit the CHANGELOG.md file
+                Git::new(Some(&args.pwd))?
+                    .add(changelog.file_path_str())?
+                    .commit("update changelog")?;
+
+                // Execute npm version <version>
+                NPM::new(Some(&args.pwd))?.version(version)?;
+            }
+
+            Ok(())
         }
         Commands::List { amount, all } => changelog.parse_contents()?.list(amount, all),
     }
