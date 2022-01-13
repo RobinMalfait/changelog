@@ -5,6 +5,15 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = 2 # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
+opt-level = "z" # smaller optimizations
+
+[profile.dev]
+opt-level = 1 # no optimizations was just too painful in terms of flash size
+
 [dependencies]
 clap = { version = "3.0.0", features = ["derive"] }
 serde = { version = "1.0.104", features = ["derive"] }
