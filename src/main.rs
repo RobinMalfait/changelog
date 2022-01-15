@@ -6,12 +6,14 @@ mod markdown;
 mod npm;
 mod output;
 mod package;
+mod rich_edit;
 
 use crate::changelog::{Amount, Changelog};
 use crate::git::Git;
 use crate::npm::NPM;
 use crate::output::output;
 use crate::output::output_indented;
+use crate::rich_edit::rich_edit;
 use clap::{AppSettings, Parser, Subcommand};
 use color_eyre::eyre::Result;
 use colored::*;
@@ -187,34 +189,70 @@ async fn main() -> Result<()> {
         } => {
             changelog.parse_contents()?;
 
-            let message = if let Some(message) = message {
+            let messages = if let Some(message) = message {
                 changelog.add_list_item_to_section(name, message.to_string());
-                message.to_string()
+                vec![message.to_string()]
             } else if let Some(link) = link {
                 let data: GitHubInfo = link.parse().unwrap();
                 changelog.add_list_item_to_section(name, data.to_string());
-                data.to_string()
+                vec![data.to_string()]
             } else {
-                output(format!(
-                    "No {}, {} or {} provided, run `{}` for more info",
-                    "<LINK>".blue().bold(),
-                    "<COMMIT HASH>".blue().bold(),
-                    "--message".blue().bold(),
-                    format!(
-                        "changelog {} --help",
-                        match &args.command {
-                            Commands::Add { .. } => "add",
-                            Commands::Fix { .. } => "fix",
-                            Commands::Change { .. } => "change",
-                            Commands::Remove { .. } => "remove",
-                            Commands::Deprecate { .. } => "deprecate",
-                            _ => unreachable!(),
+                let preface = &format!(
+                    include_str!("./fixtures/add_entry.txt"),
+                    name.to_lowercase()
+                );
+
+                let data = rich_edit(Some(preface));
+                let data = match data {
+                    Some(data) => {
+                        let data = data.trim();
+                        let data: Vec<String> = data
+                            .lines()
+                            .into_iter()
+                            .map(|line| line.trim())
+                            .filter(|line| !line.is_empty())
+                            .filter(|line| !line.starts_with('#'))
+                            .map(|line| line.to_string())
+                            .collect();
+
+                        for line in &data {
+                            changelog.add_list_item_to_section(name, line.to_string());
                         }
-                    )
-                    .blue()
-                    .bold()
-                ));
-                std::process::exit(1);
+
+                        if data.is_empty() {
+                            None
+                        } else {
+                            Some(data)
+                        }
+                    }
+                    None => None,
+                };
+
+                match data {
+                    Some(data) => data,
+                    None => {
+                        output(format!(
+                            "No {}, {} or {} provided, run `{}` for more info",
+                            "<LINK>".blue().bold(),
+                            "<COMMIT HASH>".blue().bold(),
+                            "--message".blue().bold(),
+                            format!(
+                                "changelog {} --help",
+                                match &args.command {
+                                    Commands::Add { .. } => "add",
+                                    Commands::Fix { .. } => "fix",
+                                    Commands::Change { .. } => "change",
+                                    Commands::Remove { .. } => "remove",
+                                    Commands::Deprecate { .. } => "deprecate",
+                                    _ => unreachable!(),
+                                }
+                            )
+                            .blue()
+                            .bold()
+                        ));
+                        std::process::exit(1);
+                    }
+                }
             };
 
             output(format!(
@@ -223,12 +261,14 @@ async fn main() -> Result<()> {
             ));
 
             if let Some(node) = changelog.get_contents_of_section(&Some("unreleased".to_string())) {
-                let text = node.to_string();
+                let mut text = node.to_string();
 
-                let text = text.replace(
-                    &format!("- {}", message),
-                    &format!("- {}", message.green().bold()),
-                );
+                for message in messages {
+                    text = text.replace(
+                        &format!("- {}", message),
+                        &format!("- {}", message.green().bold()),
+                    );
+                }
 
                 output_indented(text);
                 eprintln!()
