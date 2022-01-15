@@ -202,8 +202,7 @@ async fn main() -> Result<()> {
                     name.to_lowercase()
                 );
 
-                let data = rich_edit(Some(preface));
-                let data = match data {
+                let data = match rich_edit(Some(preface)) {
                     Some(data) => {
                         let data = data.trim();
                         let data: Vec<String> = data
