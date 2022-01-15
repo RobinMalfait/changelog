@@ -14,7 +14,7 @@ pub fn rich_edit(contents: Option<&str>) -> Option<String> {
 
     std::fs::write(file_path, contents.unwrap_or("")).unwrap();
 
-    match std::process::Command::new(editor.unwrap())
+    let result = match std::process::Command::new(editor.unwrap())
         .arg(&file_path)
         .status()
     {
@@ -29,5 +29,10 @@ pub fn rich_edit(contents: Option<&str>) -> Option<String> {
             }
         }
         Err(_) => None,
-    }
+    };
+
+    // Cleanup
+    std::fs::remove_file(file_path).unwrap();
+
+    result
 }
