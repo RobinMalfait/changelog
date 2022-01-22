@@ -153,12 +153,12 @@ impl Changelog {
                     .find_node_mut(|node| matches!(&node.data, Some(MarkdownToken::UnorderedList)));
 
                 if let Some(ul) = ul {
-                    let li = Node::from_token(MarkdownToken::ListItem(item));
+                    let li = Node::from_token(MarkdownToken::ListItem(item, 0));
 
                     ul.add_child(li);
                 } else {
                     let mut ul = Node::from_token(MarkdownToken::UnorderedList);
-                    let li = Node::from_token(MarkdownToken::ListItem(item));
+                    let li = Node::from_token(MarkdownToken::ListItem(item, 0));
 
                     ul.add_child(li);
 
@@ -167,7 +167,7 @@ impl Changelog {
             } else {
                 let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
                 let mut ul = Node::from_token(MarkdownToken::UnorderedList);
-                let li = Node::from_token(MarkdownToken::ListItem(item));
+                let li = Node::from_token(MarkdownToken::ListItem(item, 0));
 
                 ul.add_child(li);
                 h3.add_child(ul);
@@ -179,7 +179,7 @@ impl Changelog {
                 Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED_HEADING)));
             let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
-            let li = Node::from_token(MarkdownToken::ListItem(item));
+            let li = Node::from_token(MarkdownToken::ListItem(item, 0));
 
             ul.add_child(li);
             h3.add_child(ul);
@@ -300,7 +300,7 @@ impl Changelog {
             let mut new_unreleased =
                 Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED_HEADING)));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
-            let li = Node::from_token(MarkdownToken::ListItem("Nothing yet!".to_string()));
+            let li = Node::from_token(MarkdownToken::ListItem("Nothing yet!".to_string(), 0));
 
             ul.add_child(li);
             new_unreleased.add_child(ul);

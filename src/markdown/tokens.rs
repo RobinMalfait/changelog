@@ -7,7 +7,7 @@ pub enum MarkdownToken {
     H3(String),
     Paragraph(String),
     UnorderedList,
-    ListItem(String),
+    ListItem(String, usize),
     Reference(String, String),
     BlankLine,
 }
@@ -18,28 +18,36 @@ impl MarkdownToken {
         contents
             .split("\n\n")
             .filter(|line| !line.is_empty())
-            .flat_map(|group| match &group[..1] {
+            .flat_map(|group| match &group.trim()[..1] {
                 "#" | "-" | "[" => group
                     .lines()
-                    .map(|line| match line {
-                        line if line.starts_with("# ") => MarkdownToken::H1(line[2..].to_string()),
-                        line if line.starts_with("## ") => MarkdownToken::H2(line[3..].to_string()),
-                        line if line.starts_with("### ") => {
-                            MarkdownToken::H3(line[4..].to_string())
+                    .map(|line| {
+                        let spaces = line.chars().take_while(|c| c.is_whitespace()).count();
+                        let line = line.trim_start();
+                        match line {
+                            line if line.starts_with("# ") => {
+                                MarkdownToken::H1(line[2..].to_string())
+                            }
+                            line if line.starts_with("## ") => {
+                                MarkdownToken::H2(line[3..].to_string())
+                            }
+                            line if line.starts_with("### ") => {
+                                MarkdownToken::H3(line[4..].to_string())
+                            }
+                            line if line.starts_with("- ") => {
+                                MarkdownToken::ListItem(line[2..].to_string(), spaces)
+                            }
+                            line if line.starts_with('[') => {
+                                let mut parts = line.split(": ");
+                                let name = parts.next().unwrap();
+                                let link = parts.next().unwrap();
+                                MarkdownToken::Reference(
+                                    name[1..(name.len() - 1)].to_string(),
+                                    link.to_string(),
+                                )
+                            }
+                            _ => MarkdownToken::Paragraph(line.to_string()),
                         }
-                        line if line.starts_with("- ") => {
-                            MarkdownToken::ListItem(line[2..].to_string())
-                        }
-                        line if line.starts_with('[') => {
-                            let mut parts = line.split(": ");
-                            let name = parts.next().unwrap();
-                            let link = parts.next().unwrap();
-                            MarkdownToken::Reference(
-                                name[1..(name.len() - 1)].to_string(),
-                                link.to_string(),
-                            )
-                        }
-                        _ => MarkdownToken::Paragraph(group.to_string()),
                     })
                     .collect(),
                 _ => vec![MarkdownToken::Paragraph(group.to_string())],
@@ -56,7 +64,9 @@ impl Display for MarkdownToken {
             MarkdownToken::H3(line) => writeln!(f, "### {}", line),
             MarkdownToken::Paragraph(line) => writeln!(f, "{}", line),
             MarkdownToken::UnorderedList => Ok(()),
-            MarkdownToken::ListItem(line) => write!(f, "- {}", line),
+            MarkdownToken::ListItem(line, indent) => {
+                write!(f, "{}- {}", " ".repeat(*indent), line)
+            }
             MarkdownToken::Reference(name, link) => write!(f, "[{}]: {}", name, link),
             MarkdownToken::BlankLine => write!(f, ""),
         }

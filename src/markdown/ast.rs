@@ -156,11 +156,11 @@ fn parse(
             MarkdownToken::H1(_) | MarkdownToken::H2(_) | MarkdownToken::H3(_) => {
                 Node::new(Some(token.clone()), parse(tokens, Some(token)))
             }
-            MarkdownToken::ListItem(_) => {
+            MarkdownToken::ListItem(_, _) => {
                 let mut ul = Node::from_token(MarkdownToken::UnorderedList);
                 ul.add_child(Node::from_token(token.clone()));
 
-                while let Some(MarkdownToken::ListItem(_)) = &tokens.peek() {
+                while let Some(MarkdownToken::ListItem(_, _)) = &tokens.peek() {
                     ul.add_child(Node::from_token(tokens.next().unwrap().clone()));
                 }
 
