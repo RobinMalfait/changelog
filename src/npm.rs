@@ -3,17 +3,17 @@ use color_eyre::eyre::{eyre, Result};
 use std::process::Command;
 
 #[derive(Debug)]
-pub struct NPM {
+pub struct Npm {
     pwd: String,
 }
 
-impl NPM {
+impl Npm {
     pub fn new(pwd: Option<&str>) -> Result<Self> {
         match pwd {
-            Some(pwd) => Ok(Self {
+            Some(pwd) => Ok(Npm {
                 pwd: pwd.to_string(),
             }),
-            None => Ok(Self {
+            None => Ok(Npm {
                 pwd: std::env::current_dir()?.display().to_string(),
             }),
         }
@@ -21,7 +21,7 @@ impl NPM {
 
     pub fn version(&self, version: &SemVer) -> Result<&Self> {
         self.exec(vec!["version", &version.to_string()])?;
-        Ok(&self)
+        Ok(self)
     }
 
     pub fn exec(&self, args: Vec<&str>) -> Result<String> {

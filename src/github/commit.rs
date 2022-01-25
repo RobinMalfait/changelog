@@ -19,16 +19,16 @@ impl Commit {
     pub fn from_local_commit(pwd: &str, maybe_hash: &str) -> Result<Self> {
         let repo = Repo::from_git_repo(pwd)?;
 
-        let git = Git::new(Some(&pwd))?;
+        let git = Git::new(Some(pwd))?;
 
         let long_hash = git.long_hash(maybe_hash)?;
         let short_hash = git.short_hash(maybe_hash)?;
         let title = git.commit_message(maybe_hash)?;
 
         Ok(Self {
-            hash: long_hash.to_string(),
-            short_hash: short_hash.to_string(),
-            title: title.to_string(),
+            hash: long_hash,
+            short_hash,
+            title,
             repo,
         })
     }

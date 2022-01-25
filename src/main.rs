@@ -10,19 +10,19 @@ mod rich_edit;
 
 use crate::changelog::{Amount, Changelog};
 use crate::git::Git;
-use crate::npm::NPM;
+use crate::github::github_info::GitHubInfo;
+use crate::markdown::ast::Node;
+use crate::markdown::tokens::MarkdownToken;
+use crate::npm::Npm;
 use crate::output::output;
 use crate::output::output_indented;
 use crate::package::PackageJSON;
+use crate::package::SemVer;
 use crate::rich_edit::rich_edit;
 use clap::{AppSettings, Parser, Subcommand};
 use color_eyre::eyre::Result;
 use colored::*;
 use dialoguer::{MultiSelect, Select};
-use github::github_info::GitHubInfo;
-use markdown::ast::Node;
-use markdown::tokens::MarkdownToken;
-use package::SemVer;
 use std::fmt::Debug;
 
 /// Make CHANGELOG.md changes easier
@@ -307,8 +307,7 @@ async fn main() -> Result<()> {
                 "Added a new entry to the {} section{}:",
                 name.blue().bold(),
                 match &scope {
-                    Some(scope) =>
-                        format!("{}", format!(" ({})", &scope).to_string().white().dimmed()),
+                    Some(scope) => format!("{}", format!(" ({})", &scope).white().dimmed()),
                     None => "".to_string(),
                 }
             ));
@@ -374,7 +373,7 @@ async fn main() -> Result<()> {
                             .commit(&format!("update changelog ({})", scope))?;
 
                         // Execute npm version <version>
-                        NPM::new(Some(&args.pwd))?.version(version)?;
+                        Npm::new(Some(&args.pwd))?.version(version)?;
                     }
                 }
             } else {
@@ -393,7 +392,7 @@ async fn main() -> Result<()> {
                         .commit("update changelog")?;
 
                     // Execute npm version <version>
-                    NPM::new(Some(&args.pwd))?.version(version)?;
+                    Npm::new(Some(&args.pwd))?.version(version)?;
                 }
             }
 
