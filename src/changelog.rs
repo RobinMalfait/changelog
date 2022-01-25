@@ -15,6 +15,7 @@ const UNRELEASED_HEADING: &str = "Unreleased";
 
 #[derive(Debug, Clone)]
 pub struct Changelog {
+    scope: Option<String>,
     pwd: PathBuf,
     file_path: PathBuf,
     filename: String,
@@ -27,6 +28,7 @@ impl Changelog {
         let file_path = pwd.join(filename);
 
         Ok(Changelog {
+            scope: None,
             pwd,
             file_path,
             filename: filename.to_string(),
@@ -34,8 +36,19 @@ impl Changelog {
         })
     }
 
+    pub fn set_scope(&mut self, scope: Option<String>) {
+        self.scope = scope;
+    }
+
     pub fn file_path_str(&self) -> &str {
         self.file_path.to_str().unwrap()
+    }
+
+    pub fn unreleased_heading(&self) -> String {
+        match self.scope {
+            Some(ref scope) => format!("[{} - {}]", UNRELEASED_HEADING, scope),
+            None => format!("[{}]", UNRELEASED_HEADING),
+        }
     }
 
     pub fn parse_contents(&mut self) -> Result<&mut Self> {
@@ -106,7 +119,11 @@ impl Changelog {
     pub fn find_latest_version(&self) -> Option<&str> {
         if let Some(node) = self.root.find_node(|node| {
             if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                !name.eq_ignore_ascii_case(UNRELEASED_HEADING)
+                !name.to_lowercase().starts_with("unreleased")
+                    && match self.scope {
+                        Some(ref scope) => name.to_lowercase().contains(scope),
+                        None => true,
+                    }
             } else {
                 false
             }
@@ -121,9 +138,10 @@ impl Changelog {
 
     // TODO: This is horrible... refactor this!
     pub fn add_list_item_to_section(&mut self, section_name: &str, item: String) {
+        let unreleased_heading = self.unreleased_heading();
         let unreleased = self.root.find_node_mut(|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
-                name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
+                name.eq_ignore_ascii_case(&unreleased_heading)
             } else {
                 false
             }
@@ -175,8 +193,8 @@ impl Changelog {
                 unreleased.add_child(h3);
             }
         } else {
-            let mut section =
-                Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED_HEADING)));
+            let unreleased_heading = self.unreleased_heading();
+            let mut section = Node::from_token(MarkdownToken::H2(unreleased_heading));
             let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
             let li = Node::from_token(MarkdownToken::ListItem(item, 0));
@@ -200,15 +218,20 @@ impl Changelog {
                 match name {
                     Some(name) => {
                         if name.eq_ignore_ascii_case("latest") {
-                            !section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
+                            !section_name.eq_ignore_ascii_case(&self.unreleased_heading())
                         } else {
-                            section_name
-                                .to_lowercase()
-                                .starts_with(&format!("[{}]", name.to_lowercase()))
+                            match self.scope {
+                                Some(ref scope) => section_name
+                                    .to_lowercase()
+                                    .starts_with(&format!("[{}@{}]", scope, name.to_lowercase())),
+                                None => section_name
+                                    .to_lowercase()
+                                    .starts_with(&format!("[{}]", name.to_lowercase())),
+                            }
                         }
                     }
                     None => {
-                        if section_name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING)) {
+                        if section_name.eq_ignore_ascii_case(&self.unreleased_heading()) {
                             node.find_node(|node| matches!(&node.data, Some(MarkdownToken::H3(_))))
                                 .is_some()
                         } else {
@@ -286,19 +309,27 @@ impl Changelog {
     pub fn release(&mut self, version: &SemVer) -> Result<()> {
         let date = Local::now().format("%Y-%m-%d");
 
+        let unreleased_heading = self.unreleased_heading();
         if let Some(unreleased) = self.root.find_node_mut(|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
-                name.eq_ignore_ascii_case(&format!("[{}]", UNRELEASED_HEADING))
+                name.eq_ignore_ascii_case(&unreleased_heading)
             } else {
                 false
             }
         }) {
             // Convert to the new version
-            unreleased.rename_heading(&format!("[{}] - {}", version, date));
+            unreleased.rename_heading(&format!(
+                "[{}] - {}",
+                match self.scope {
+                    Some(ref scope) => format!("{}@{}", scope, version),
+                    None => format!("{}", version),
+                },
+                date
+            ));
 
             // Insert new [Unreleased] section at the top
             let mut new_unreleased =
-                Node::from_token(MarkdownToken::H2(format!("[{}]", UNRELEASED_HEADING)));
+                Node::from_token(MarkdownToken::H2(unreleased_heading.clone()));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
             let li = Node::from_token(MarkdownToken::ListItem("Nothing yet!".to_string(), 0));
 
@@ -317,7 +348,9 @@ impl Changelog {
                 Some(old_version) => {
                     if let Some(unreleased_reference) = self.root.find_node_mut(|node| {
                         if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                            name.eq_ignore_ascii_case(UNRELEASED_HEADING)
+                            name.eq_ignore_ascii_case(
+                                &unreleased_heading[1..unreleased_heading.len() - 1],
+                            )
                         } else {
                             false
                         }
@@ -336,19 +369,22 @@ impl Changelog {
 
                             // Insert new version reference
                             let new_version_reference = Node::from_token(MarkdownToken::Reference(
-                                version.to_string(),
+                                match self.scope {
+                                    Some(ref scope) => format!("{}@{}", scope, version),
+                                    None => format!("{}", version),
+                                },
                                 new_link,
                             ));
 
                             match self.root.children.iter().position(|node| {
                                 if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                                    name.eq_ignore_ascii_case(UNRELEASED_HEADING)
+                                    !name.to_lowercase().starts_with("unreleased")
                                 } else {
                                     false
                                 }
                             }) {
                                 Some(idx) => {
-                                    self.root.add_child_at(idx + 1, new_version_reference);
+                                    self.root.add_child_at(idx, new_version_reference);
                                 }
                                 None => {
                                     self.root.add_child(new_version_reference);

@@ -1,7 +1,9 @@
 use color_eyre::eyre::{eyre, Error, Result};
 use colored::*;
+use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::path::Path;
 use std::str::FromStr;
 
 /// Semantic Versioning 2.0.0: https://semver.org
@@ -39,15 +41,15 @@ impl FromStr for SemVer {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "major" => {
-                let pkg = PackageJSON::read("./package.json")?;
+                let pkg = PackageJSON::from_current_directory()?;
                 Ok(Self::new(pkg.version.major + 1, 0, 0))
             }
             "minor" => {
-                let pkg = PackageJSON::read("./package.json")?;
+                let pkg = PackageJSON::from_current_directory()?;
                 Ok(Self::new(pkg.version.major, pkg.version.minor + 1, 0))
             }
             "patch" => {
-                let pkg = PackageJSON::read("./package.json")?;
+                let pkg = PackageJSON::from_current_directory()?;
                 Ok(Self::new(
                     pkg.version.major,
                     pkg.version.minor,
@@ -55,7 +57,7 @@ impl FromStr for SemVer {
                 ))
             }
             "infer" => {
-                let pkg = PackageJSON::read("./package.json")?;
+                let pkg = PackageJSON::from_current_directory()?;
                 Ok(pkg.version)
             }
             _ => {
@@ -96,13 +98,17 @@ impl<'de> Deserialize<'de> for SemVer {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PackageJSON {
+    name: String,
     version: SemVer,
+    workspaces: Option<Vec<String>>,
 }
 
 impl PackageJSON {
-    fn read(path: &str) -> Result<PackageJSON> {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => match serde_json::from_str::<PackageJSON>(&contents) {
+    pub fn from_directory(dir: &Path) -> Result<Self> {
+        let package_json_path = dir.join("package.json");
+
+        match std::fs::read_to_string(package_json_path) {
+            Ok(contents) => match serde_json::from_str::<Self>(&contents) {
                 Ok(pkg) => Ok(pkg),
                 Err(e) => Err(eyre!(format!(
                     "Error while reading {}: {}",
@@ -116,5 +122,36 @@ impl PackageJSON {
                 e.to_string().red()
             ))),
         }
+    }
+
+    pub fn from_current_directory() -> Result<Self> {
+        let pwd = std::env::current_dir()?;
+        Self::from_directory(&pwd)
+    }
+
+    pub fn is_monorepo(&self) -> bool {
+        self.workspaces.is_some()
+    }
+
+    pub fn packages(&self) -> Result<Vec<String>> {
+        // TODO: Get this from `pwd` properly
+        let base = std::env::current_dir()?;
+
+        let mut packages = vec![];
+
+        if let Some(workspaces) = &self.workspaces {
+            for workspace_glob in workspaces {
+                packages.extend(
+                    glob(base.join(workspace_glob).to_str().unwrap())
+                        .expect("Failed to read glob pattern")
+                        .flatten()
+                        .filter(|path| path.is_dir())
+                        .filter_map(|path| PackageJSON::from_directory(&path).ok())
+                        .map(|pkg| pkg.name),
+                )
+            }
+        }
+
+        Ok(packages)
     }
 }
