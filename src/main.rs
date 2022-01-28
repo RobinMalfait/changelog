@@ -65,6 +65,10 @@ enum Commands {
         /// The name of the package (useful in monorepos)
         #[clap(short, long)]
         scope: Option<String>,
+
+        /// Whether or not to commit the changes
+        #[clap(short, long)]
+        commit: bool,
     },
 
     /// Add a new entry to the changelog in the "Fixed" section
@@ -84,6 +88,10 @@ enum Commands {
         /// The name of the package (useful in monorepos)
         #[clap(short, long)]
         scope: Option<String>,
+
+        /// Whether or not to commit the changes
+        #[clap(short, long)]
+        commit: bool,
     },
 
     /// Add a new entry to the changelog in the "Changed" section
@@ -103,6 +111,10 @@ enum Commands {
         /// The name of the package (useful in monorepos)
         #[clap(short, long)]
         scope: Option<String>,
+
+        /// Whether or not to commit the changes
+        #[clap(short, long)]
+        commit: bool,
     },
 
     /// Add a new entry to the changelog in the "Deprecated" section
@@ -121,6 +133,10 @@ enum Commands {
         /// The name of the package (useful in monorepos)
         #[clap(short, long)]
         scope: Option<String>,
+
+        /// Whether or not to commit the changes
+        #[clap(short, long)]
+        commit: bool,
     },
 
     /// Add a new entry to the changelog in the "Removed" section
@@ -140,6 +156,10 @@ enum Commands {
         /// The name of the package (useful in monorepos)
         #[clap(short, long)]
         scope: Option<String>,
+
+        /// Whether or not to commit the changes
+        #[clap(short, long)]
+        commit: bool,
     },
 
     /// Release a new version
@@ -194,30 +214,35 @@ async fn main() -> Result<()> {
             message,
             name,
             scope,
+            commit,
         }
         | Commands::Fix {
             link,
             message,
             name,
             scope,
+            commit,
         }
         | Commands::Change {
             link,
             message,
             name,
             scope,
+            commit,
         }
         | Commands::Remove {
             link,
             message,
             name,
             scope,
+            commit,
         }
         | Commands::Deprecate {
             link,
             message,
             name,
             scope,
+            commit,
         } => {
             let scope = if !pkg.is_monorepo() {
                 None
@@ -326,7 +351,16 @@ async fn main() -> Result<()> {
                 eprintln!()
             }
 
-            changelog.persist()
+            changelog.persist()?;
+
+            if *commit {
+                // Commit the CHANGELOG.md file
+                Git::new(Some(&args.pwd))?
+                    .add(changelog.file_path_str())?
+                    .commit("update changelog")?;
+            }
+
+            Ok(())
         }
         Commands::Notes { version } => changelog.parse_contents()?.notes(version),
         Commands::Release {
