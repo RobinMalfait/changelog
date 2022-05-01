@@ -23,7 +23,7 @@ pub struct Changelog {
 }
 
 impl Changelog {
-    pub fn new(pwd: &str, filename: &str) -> Result<Self> {
+    pub fn new(pwd: &PathBuf, filename: &str) -> Result<Self> {
         let pwd = fs::canonicalize(pwd)?;
         let file_path = pwd.join(filename);
 
@@ -79,7 +79,7 @@ impl Changelog {
 
             Ok(())
         } else {
-            if !Git::new(Some(self.pwd.to_str().unwrap()))?.is_git_repo() {
+            if !Git::new(Some(&self.pwd))?.is_git_repo() {
                 output(format!(
                     "Not a git repository: {}",
                     self.pwd.to_str().unwrap().white().dimmed()
@@ -89,7 +89,7 @@ impl Changelog {
             }
 
             let date = Local::now().format("%Y-%m-%d");
-            let repo = Repo::from_git_repo(self.pwd.to_str().unwrap())?;
+            let repo = Repo::from_git_repo(&self.pwd)?;
 
             let root: Node = include_str!("./fixtures/changelog.md")
                 .to_string()

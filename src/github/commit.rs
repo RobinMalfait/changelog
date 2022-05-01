@@ -5,6 +5,7 @@ use crate::graphql::graphql;
 use color_eyre::eyre::Result;
 use serde_json::json;
 use std::fmt::{Debug, Display};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 #[derive(Debug)]
@@ -16,7 +17,7 @@ pub struct Commit {
 }
 
 impl Commit {
-    pub fn from_local_commit(pwd: &str, maybe_hash: &str) -> Result<Self> {
+    pub fn from_local_commit(pwd: &PathBuf, maybe_hash: &str) -> Result<Self> {
         let repo = Repo::from_git_repo(pwd)?;
 
         let git = Git::new(Some(pwd))?;
@@ -81,7 +82,7 @@ impl FromStr for Commit {
                 // TODO: Get from root
                 let pwd = std::fs::canonicalize(".").expect("File path doesn't seem to exist");
 
-                match Commit::from_local_commit(pwd.to_str().unwrap(), s) {
+                match Commit::from_local_commit(&pwd, s) {
                     Ok(commit) => Ok(commit),
                     Err(e) => Err(e.to_string()),
                 }

@@ -148,7 +148,7 @@ fn parse(
     tokens: &mut std::iter::Peekable<std::slice::Iter<'_, MarkdownToken>>,
     parent: Option<&MarkdownToken>,
 ) -> Vec<Node> {
-    // TODO: Improve converthing our tokens to an AST
+    // TODO: Improve converting our tokens to an AST
     let mut root: Vec<Node> = vec![];
 
     while let Some(token) = tokens.next() {

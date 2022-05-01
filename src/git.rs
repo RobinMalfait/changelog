@@ -1,21 +1,20 @@
 use color_eyre::eyre::{eyre, Result};
+use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Debug)]
 pub struct Git {
-    pwd: String,
+    pwd: PathBuf,
 }
 
 impl Git {
-    pub fn new(pwd: Option<&str>) -> Result<Self> {
-        match pwd {
-            Some(pwd) => Ok(Self {
-                pwd: pwd.to_string(),
-            }),
-            None => Ok(Self {
-                pwd: std::env::current_dir()?.display().to_string(),
-            }),
-        }
+    pub fn new(pwd: Option<&PathBuf>) -> Result<Self> {
+        Ok(Self {
+            pwd: match pwd {
+                Some(pwd) => pwd.to_path_buf(),
+                None => std::env::current_dir()?,
+            },
+        })
     }
 
     pub fn long_hash(&self, hash: &str) -> Result<String> {

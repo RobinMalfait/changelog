@@ -1,5 +1,6 @@
 use crate::git::Git;
 use color_eyre::eyre::{eyre, Result};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Repo {
@@ -12,7 +13,7 @@ impl Repo {
         Self { org, repo }
     }
 
-    pub fn from_git_repo(pwd: &str) -> Result<Self> {
+    pub fn from_git_repo(pwd: &PathBuf) -> Result<Self> {
         match Git::new(Some(pwd))?.exec(vec!["config", "--get", "remote.origin.url"]) {
             Ok(output) => {
                 let output = output.replace(".git", "");

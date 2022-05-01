@@ -4,10 +4,11 @@ use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::path::Path;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 /// Semantic Versioning 2.0.0: https://semver.org
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Copy, Clone)]
 pub struct SemVer {
     /// Version when you make incompatible API changes
     major: u64,
@@ -29,6 +30,20 @@ impl SemVer {
     }
 }
 
+impl SemVer {
+    fn new_major(&self) -> Self {
+        Self::new(self.major + 1, 0, 0)
+    }
+
+    fn new_minor(&self) -> Self {
+        Self::new(self.major, self.minor + 1, 0)
+    }
+
+    fn new_patch(&self) -> Self {
+        Self::new(self.major, self.minor, self.patch + 1)
+    }
+}
+
 impl Display for SemVer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
@@ -42,24 +57,17 @@ impl FromStr for SemVer {
         match s {
             "major" => {
                 let pkg = PackageJSON::from_current_directory()?;
-                Ok(Self::new(pkg.version.major + 1, 0, 0))
+                Ok(pkg.version.new_major())
             }
             "minor" => {
                 let pkg = PackageJSON::from_current_directory()?;
-                Ok(Self::new(pkg.version.major, pkg.version.minor + 1, 0))
+                Ok(pkg.version.new_minor())
             }
             "patch" => {
                 let pkg = PackageJSON::from_current_directory()?;
-                Ok(Self::new(
-                    pkg.version.major,
-                    pkg.version.minor,
-                    pkg.version.patch + 1,
-                ))
+                Ok(pkg.version.new_patch())
             }
-            "infer" => {
-                let pkg = PackageJSON::from_current_directory()?;
-                Ok(pkg.version)
-            }
+            "infer" => Ok(PackageJSON::from_current_directory()?.version),
             _ => {
                 let mut parts = s.split('.');
 
@@ -96,8 +104,13 @@ impl<'de> Deserialize<'de> for SemVer {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PackageJSON {
+    // Meta data
+    #[serde(skip)]
+    pwd: PathBuf,
+
+    // Actual PackageJSON data
     name: String,
     version: SemVer,
     workspaces: Option<Vec<String>>,
@@ -106,38 +119,35 @@ pub struct PackageJSON {
 impl PackageJSON {
     pub fn from_directory(dir: &Path) -> Result<Self> {
         let package_json_path = dir.join("package.json");
-
-        match std::fs::read_to_string(package_json_path) {
-            Ok(contents) => match serde_json::from_str::<Self>(&contents) {
-                Ok(pkg) => Ok(pkg),
-                Err(e) => Err(eyre!(format!(
-                    "Error while reading {}: {}",
-                    "package.json".blue(),
-                    e.to_string().red()
-                ))),
-            },
-            Err(e) => Err(eyre!(format!(
-                "Error while reading {}: {}",
-                "package.json".blue(),
-                e.to_string().red()
-            ))),
-        }
+        let contents = std::fs::read_to_string(package_json_path)?;
+        serde_json::from_str::<Self>(&contents)
+            .map(|mut pkg| {
+                pkg.pwd = dir.to_path_buf();
+                pkg
+            })
+            .map_err(|e| eyre!(e))
     }
 
     pub fn from_current_directory() -> Result<Self> {
-        let pwd = std::env::current_dir()?;
-        Self::from_directory(&pwd)
+        Self::from_directory(&std::env::current_dir()?)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn version(&self) -> &SemVer {
+        &self.version
     }
 
     pub fn is_monorepo(&self) -> bool {
         self.workspaces.is_some()
     }
 
-    pub fn packages(&self) -> Result<Vec<String>> {
-        // TODO: Get this from `pwd` properly
-        let base = std::env::current_dir()?;
+    pub fn packages(&self) -> Result<Vec<PackageJSON>> {
+        let base = &self.pwd;
 
-        let mut packages = vec![];
+        let mut packages: Vec<PackageJSON> = vec![];
 
         if let Some(workspaces) = &self.workspaces {
             for workspace_glob in workspaces {
@@ -146,12 +156,16 @@ impl PackageJSON {
                         .expect("Failed to read glob pattern")
                         .flatten()
                         .filter(|path| path.is_dir())
-                        .filter_map(|path| PackageJSON::from_directory(&path).ok())
-                        .map(|pkg| pkg.name),
+                        .filter_map(|path| PackageJSON::from_directory(&path).ok()),
                 )
             }
         }
 
         Ok(packages)
+    }
+
+    pub fn package_names(&self) -> Result<Vec<String>> {
+        self.packages()
+            .map(|packages| packages.iter().map(|pkg| pkg.name.clone()).collect())
     }
 }

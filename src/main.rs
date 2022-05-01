@@ -2,6 +2,7 @@ mod changelog;
 mod git;
 mod github;
 mod graphql;
+mod list_format;
 mod markdown;
 mod npm;
 mod output;
@@ -11,6 +12,7 @@ mod rich_edit;
 use crate::changelog::{Amount, Changelog};
 use crate::git::Git;
 use crate::github::github_info::GitHubInfo;
+use crate::list_format::conjunction;
 use crate::markdown::ast::Node;
 use crate::markdown::tokens::MarkdownToken;
 use crate::npm::Npm;
@@ -20,10 +22,11 @@ use crate::package::PackageJSON;
 use crate::package::SemVer;
 use crate::rich_edit::rich_edit;
 use clap::{AppSettings, Parser, Subcommand};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{eyre, Result};
 use colored::*;
-use dialoguer::{MultiSelect, Select};
+use dialoguer::MultiSelect;
 use std::fmt::Debug;
+use std::fs;
 
 /// Make CHANGELOG.md changes easier
 #[derive(Parser, Debug)]
@@ -36,6 +39,17 @@ struct Cli {
     /// The changelog filename
     #[clap(short, long, default_value = "CHANGELOG.md", global = true)]
     filename: String,
+
+    /// Used in monorepos. Operate on these packages only. You can also pass multiple occurrences.
+    /// If none are passed, an interactive prompt will be shown.
+    #[clap(
+        short,
+        long = "scope",
+        name = "SCOPE",
+        multiple_occurrences = true,
+        global = true
+    )]
+    scopes: Vec<String>,
 
     /// The subcommand to run
     #[clap(subcommand)]
@@ -62,10 +76,6 @@ enum Commands {
         #[clap(hide = true, default_value = "Added")]
         name: String,
 
-        /// The name of the package (useful in monorepos)
-        #[clap(short, long)]
-        scope: Option<String>,
-
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
@@ -84,10 +94,6 @@ enum Commands {
         /// The section name to add the entry to
         #[clap(hide = true, default_value = "Fixed")]
         name: String,
-
-        /// The name of the package (useful in monorepos)
-        #[clap(short, long)]
-        scope: Option<String>,
 
         /// Whether or not to commit the changes
         #[clap(short, long)]
@@ -108,10 +114,6 @@ enum Commands {
         #[clap(hide = true, default_value = "Changed")]
         name: String,
 
-        /// The name of the package (useful in monorepos)
-        #[clap(short, long)]
-        scope: Option<String>,
-
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
@@ -130,9 +132,6 @@ enum Commands {
         /// The section name to add the entry to
         #[clap(hide = true, default_value = "Deprecated")]
         name: String,
-        /// The name of the package (useful in monorepos)
-        #[clap(short, long)]
-        scope: Option<String>,
 
         /// Whether or not to commit the changes
         #[clap(short, long)]
@@ -153,10 +152,6 @@ enum Commands {
         #[clap(hide = true, default_value = "Removed")]
         name: String,
 
-        /// The name of the package (useful in monorepos)
-        #[clap(short, long)]
-        scope: Option<String>,
-
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
@@ -173,10 +168,6 @@ enum Commands {
         /// creates a new git tag)
         #[clap(long)]
         with_npm: bool,
-
-        /// The name of the package (useful in monorepos)
-        #[clap(short, long)]
-        scope: Option<String>,
     },
 
     /// Get the release notes of a specific version (or unreleased)
@@ -201,11 +192,50 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
+
     let args = Cli::parse();
 
-    let mut changelog = Changelog::new(&args.pwd, &args.filename)?;
+    // Resolve the current working directory
+    let pwd = fs::canonicalize(&args.pwd)?;
 
-    let pkg = PackageJSON::from_current_directory()?;
+    // Resolve the package.json manifest file
+    let root_pkg = PackageJSON::from_directory(&pwd)?;
+
+    // Resolve the current scopes
+    let scopes: Option<Vec<PackageJSON>> = if root_pkg.is_monorepo() {
+        let options = root_pkg.packages()?;
+
+        if args.scopes.is_empty() {
+            let resolved_scopes: Vec<PackageJSON> = MultiSelect::new()
+                .with_prompt("Select the package(s) to work on")
+                .items(&options.iter().map(|pkg| pkg.name()).collect::<Vec<_>>())
+                .clear(true)
+                .interact()
+                .map(|indexes| {
+                    indexes
+                        .into_iter()
+                        .map(|index| options[index].clone())
+                        .collect::<Vec<_>>()
+                })?;
+
+            if resolved_scopes.is_empty() {
+                return Err(eyre!("No packages selected"));
+            }
+
+            Some(resolved_scopes)
+        } else {
+            let resolved_scopes: Vec<PackageJSON> = options
+                .into_iter()
+                .filter(|pkg| args.scopes.iter().any(|scope| pkg.name().eq(scope)))
+                .collect();
+
+            Some(resolved_scopes)
+        }
+    } else {
+        None
+    };
+
+    let mut changelog = Changelog::new(&pwd, &args.filename)?;
 
     match &args.command {
         Commands::Init => changelog.init(),
@@ -213,54 +243,32 @@ async fn main() -> Result<()> {
             link,
             message,
             name,
-            scope,
             commit,
         }
         | Commands::Fix {
             link,
             message,
             name,
-            scope,
             commit,
         }
         | Commands::Change {
             link,
             message,
             name,
-            scope,
             commit,
         }
         | Commands::Remove {
             link,
             message,
             name,
-            scope,
             commit,
         }
         | Commands::Deprecate {
             link,
             message,
             name,
-            scope,
             commit,
         } => {
-            let scope = if !pkg.is_monorepo() {
-                None
-            } else if scope.is_none() {
-                let options = pkg.packages()?;
-                let idx = Select::new()
-                    .with_prompt("Select a package to add the entry to:")
-                    .items(&options)
-                    .clear(true)
-                    .default(0)
-                    .interact()?;
-
-                Some(options[idx].clone())
-            } else {
-                Some(scope.as_ref().unwrap().clone())
-            };
-
-            changelog.set_scope(scope.clone());
             changelog.parse_contents()?;
 
             let messages = if let Some(message) = message {
@@ -301,41 +309,53 @@ async fn main() -> Result<()> {
                     None => None,
                 };
 
-                match data {
-                    Some(data) => data,
-                    None => {
-                        output(format!(
-                            "No {}, {} or {} provided, run `{}` for more info",
-                            "<LINK>".blue().bold(),
-                            "<COMMIT HASH>".blue().bold(),
-                            "--message".blue().bold(),
-                            format!(
-                                "changelog {} --help",
-                                match &args.command {
-                                    Commands::Add { .. } => "add",
-                                    Commands::Fix { .. } => "fix",
-                                    Commands::Change { .. } => "change",
-                                    Commands::Remove { .. } => "remove",
-                                    Commands::Deprecate { .. } => "deprecate",
-                                    _ => unreachable!(),
-                                }
-                            )
-                            .blue()
-                            .bold()
-                        ));
-                        std::process::exit(1);
-                    }
-                }
+                data.unwrap_or_else(|| {
+                    output(format!(
+                        "No {}, {} or {} provided, run `{}` for more info",
+                        "<LINK>".blue().bold(),
+                        "<COMMIT HASH>".blue().bold(),
+                        "--message".blue().bold(),
+                        format!(
+                            "changelog {} --help",
+                            match &args.command {
+                                Commands::Add { .. } => "add",
+                                Commands::Fix { .. } => "fix",
+                                Commands::Change { .. } => "change",
+                                Commands::Remove { .. } => "remove",
+                                Commands::Deprecate { .. } => "deprecate",
+                                _ => unreachable!(),
+                            }
+                        )
+                        .blue()
+                        .bold()
+                    ));
+
+                    std::process::exit(1);
+                })
             };
 
-            output(format!(
-                "Added a new entry to the {} section{}:",
-                name.blue().bold(),
-                match &scope {
-                    Some(scope) => format!("{}", format!(" ({})", &scope).white().dimmed()),
-                    None => "".to_string(),
+            match &scopes {
+                Some(scopes) => {
+                    output(format!(
+                        "Added a new entry to the {} section {}:",
+                        name.blue().bold(),
+                        format!(
+                            "({})",
+                            &conjunction(
+                                &scopes.iter().map(|scope| scope.name()).collect::<Vec<_>>()
+                            )
+                        )
+                        .white()
+                        .dimmed()
+                    ));
                 }
-            ));
+                None => {
+                    output(format!(
+                        "Added a new entry to the {} section:",
+                        name.blue().bold()
+                    ));
+                }
+            }
 
             if let Some(node) = changelog.get_contents_of_section(&None) {
                 let mut text = node.to_string();
@@ -355,7 +375,7 @@ async fn main() -> Result<()> {
 
             if *commit {
                 // Commit the CHANGELOG.md file
-                Git::new(Some(&args.pwd))?
+                Git::new(Some(&pwd))?
                     .add(changelog.file_path_str())?
                     .commit("update changelog")?;
             }
@@ -363,35 +383,30 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Commands::Notes { version } => changelog.parse_contents()?.notes(version),
-        Commands::Release {
-            version,
-            with_npm,
-            scope,
-        } => {
-            let scopes = if !pkg.is_monorepo() {
-                None
-            } else if scope.is_none() {
-                let options = pkg.packages()?;
-                let indexes = MultiSelect::new()
-                    .with_prompt("Select the packages to release:")
-                    .items(&options)
-                    .clear(true)
-                    .interact()?;
+        Commands::Release { version, with_npm } => {
+            match &scopes {
+                Some(scopes) => {
+                    for scope in scopes {
+                        // TODO: properly handle the version in a monorepo per package. This means if package A
+                        // is on 0.1.2 and package B is on 0.2.1 and we create a "minor" release than this
+                        // should happen:
+                        // - package A 0.1.2 -> 0.2.0
+                        // - package B 0.2.1 -> 0.3.0
+                        output(format!("Releasing {}", version.to_string().green().bold()));
+                        changelog.parse_contents()?.release(version)?;
 
-                Some(
-                    indexes
-                        .into_iter()
-                        .map(|idx| options[idx].clone())
-                        .collect(),
-                )
-            } else {
-                Some(vec![scope.as_ref().unwrap().clone()])
-            };
+                        if *with_npm {
+                            // Commit the CHANGELOG.md file
+                            Git::new(Some(&pwd))?
+                                .add(changelog.file_path_str())?
+                                .commit(&format!("update changelog ({})", scope.name()))?;
 
-            if let Some(scopes) = scopes {
-                for scope in scopes {
-                    changelog.set_scope(Some(scope.clone()));
-
+                            // Execute npm version <version>
+                            Npm::new(Some(&args.pwd))?.version(version)?;
+                        }
+                    }
+                }
+                None => {
                     // TODO: properly handle the version in a monorepo per package. This means if package A
                     // is on 0.1.2 and package B is on 0.2.1 and we create a "minor" release than this
                     // should happen:
@@ -402,31 +417,13 @@ async fn main() -> Result<()> {
 
                     if *with_npm {
                         // Commit the CHANGELOG.md file
-                        Git::new(Some(&args.pwd))?
+                        Git::new(Some(&pwd))?
                             .add(changelog.file_path_str())?
-                            .commit(&format!("update changelog ({})", scope))?;
+                            .commit("update changelog")?;
 
                         // Execute npm version <version>
                         Npm::new(Some(&args.pwd))?.version(version)?;
                     }
-                }
-            } else {
-                // TODO: properly handle the version in a monorepo per package. This means if package A
-                // is on 0.1.2 and package B is on 0.2.1 and we create a "minor" release than this
-                // should happen:
-                // - package A 0.1.2 -> 0.2.0
-                // - package B 0.2.1 -> 0.3.0
-                output(format!("Releasing {}", version.to_string().green().bold()));
-                changelog.parse_contents()?.release(version)?;
-
-                if *with_npm {
-                    // Commit the CHANGELOG.md file
-                    Git::new(Some(&args.pwd))?
-                        .add(changelog.file_path_str())?
-                        .commit("update changelog")?;
-
-                    // Execute npm version <version>
-                    Npm::new(Some(&args.pwd))?.version(version)?;
                 }
             }
 
