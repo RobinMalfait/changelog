@@ -24,6 +24,19 @@ impl Npm {
         Ok(self)
     }
 
+    pub fn version_options(&self, version: &SemVer, no_git_tag_version: bool) -> Result<&Self> {
+        self.exec(vec![
+            "version",
+            &version.to_string(),
+            match no_git_tag_version {
+                true => "--no-git-tag-version",
+                false => "",
+            },
+        ])?;
+
+        Ok(self)
+    }
+
     pub fn exec(&self, args: Vec<&str>) -> Result<String> {
         let mut cmd = Command::new("npm");
 

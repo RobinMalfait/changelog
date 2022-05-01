@@ -52,6 +52,11 @@ impl Git {
         Ok(self)
     }
 
+    pub fn tag(&self, path: &str) -> Result<&Self> {
+        self.exec(vec!["tag", path])?;
+        Ok(self)
+    }
+
     pub fn commit(&self, msg: &str) -> Result<&Self> {
         self.exec(vec!["commit", "-m", msg])?;
         Ok(self)

@@ -3,32 +3,40 @@ use crate::github::repo::Repo;
 use crate::output::output;
 use crate::MarkdownToken;
 use crate::Node;
+use crate::PackageJSON;
 use crate::SemVer;
 use chrono::prelude::*;
 use color_eyre::eyre::{eyre, Result};
 use colored::*;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 const UNRELEASED_HEADING: &str = "Unreleased";
 
 #[derive(Debug, Clone)]
-pub struct Changelog {
-    scope: Option<String>,
+pub struct Changelog<'a> {
+    scopes: &'a Option<Vec<PackageJSON>>,
     pwd: PathBuf,
     file_path: PathBuf,
     filename: String,
     root: Node,
 }
 
-impl Changelog {
-    pub fn new(pwd: &PathBuf, filename: &str) -> Result<Self> {
+impl<'a> Changelog<'a> {
+    pub fn new(
+        pwd: &Path,
+        filename: &str,
+        //      None => when it is not a monorepo
+        // Some(vec) => when it is a monorepo
+        scopes: &'a Option<Vec<PackageJSON>>,
+    ) -> Result<Self> {
         let pwd = fs::canonicalize(pwd)?;
         let file_path = pwd.join(filename);
 
         Ok(Changelog {
-            scope: None,
+            scopes,
             pwd,
             file_path,
             filename: filename.to_string(),
@@ -36,17 +44,13 @@ impl Changelog {
         })
     }
 
-    pub fn set_scope(&mut self, scope: Option<String>) {
-        self.scope = scope;
-    }
-
     pub fn file_path_str(&self) -> &str {
         self.file_path.to_str().unwrap()
     }
 
-    pub fn unreleased_heading(&self) -> String {
-        match self.scope {
-            Some(ref scope) => format!("[{} - {}]", UNRELEASED_HEADING, scope),
+    pub fn unreleased_heading(&self, scope: Option<&PackageJSON>) -> String {
+        match scope {
+            Some(scope) => format!("[{} - {}]", UNRELEASED_HEADING, scope.name()),
             None => format!("[{}]", UNRELEASED_HEADING),
         }
     }
@@ -116,12 +120,12 @@ impl Changelog {
         }
     }
 
-    pub fn find_latest_version(&self) -> Option<&str> {
+    fn find_latest_version_scope(&self, scope: Option<&PackageJSON>) -> Option<&str> {
         if let Some(node) = self.root.find_node(|node| {
             if let Some(MarkdownToken::Reference(name, _)) = &node.data {
                 !name.to_lowercase().starts_with("unreleased")
-                    && match self.scope {
-                        Some(ref scope) => name.to_lowercase().contains(scope),
+                    && match scope {
+                        Some(scope) => name.to_lowercase().contains(scope.name()),
                         None => true,
                     }
             } else {
@@ -136,9 +140,18 @@ impl Changelog {
         None
     }
 
+    pub fn find_latest_version(&self) -> Option<&str> {
+        self.find_latest_version_scope(None)
+    }
+
     // TODO: This is horrible... refactor this!
-    pub fn add_list_item_to_section(&mut self, section_name: &str, item: String) {
-        let unreleased_heading = self.unreleased_heading();
+    fn add_list_item_to_section_scope(
+        &mut self,
+        section_name: &str,
+        item: String,
+        scope: Option<&PackageJSON>,
+    ) {
+        let unreleased_heading = self.unreleased_heading(scope);
         let unreleased = self.root.find_node_mut(|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
                 name.eq_ignore_ascii_case(&unreleased_heading)
@@ -193,7 +206,7 @@ impl Changelog {
                 unreleased.add_child(h3);
             }
         } else {
-            let unreleased_heading = self.unreleased_heading();
+            let unreleased_heading = self.unreleased_heading(scope);
             let mut section = Node::from_token(MarkdownToken::H2(unreleased_heading));
             let mut h3 = Node::from_token(MarkdownToken::H3(section_name.to_string()));
             let mut ul = Node::from_token(MarkdownToken::UnorderedList);
@@ -212,18 +225,41 @@ impl Changelog {
         }
     }
 
-    pub fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
+    pub fn add_list_item_to_section(&mut self, section_name: &str, item: &str) {
+        match self.scopes {
+            Some(scopes) => {
+                for scope in scopes {
+                    self.add_list_item_to_section_scope(
+                        section_name,
+                        item.to_string(),
+                        Some(scope),
+                    );
+                }
+            }
+            None => {
+                self.add_list_item_to_section_scope(section_name, item.to_string(), None);
+            }
+        }
+    }
+
+    fn get_contents_of_section_scope(
+        &self,
+        name: &Option<String>,
+        scope: Option<&PackageJSON>,
+    ) -> Option<Node> {
         let node = self.root.find_node(|node| {
             if let Some(MarkdownToken::H2(section_name)) = &node.data {
                 match name {
                     Some(name) => {
                         if name.eq_ignore_ascii_case("latest") {
-                            !section_name.eq_ignore_ascii_case(&self.unreleased_heading())
+                            !section_name.eq_ignore_ascii_case(&self.unreleased_heading(scope))
                         } else {
-                            match self.scope {
-                                Some(ref scope) => section_name
-                                    .to_lowercase()
-                                    .starts_with(&format!("[{}@{}]", scope, name.to_lowercase())),
+                            match scope {
+                                Some(scope) => section_name.to_lowercase().starts_with(&format!(
+                                    "[{}@{}]",
+                                    scope.name(),
+                                    name.to_lowercase()
+                                )),
                                 None => section_name
                                     .to_lowercase()
                                     .starts_with(&format!("[{}]", name.to_lowercase())),
@@ -231,7 +267,7 @@ impl Changelog {
                         }
                     }
                     None => {
-                        if section_name.eq_ignore_ascii_case(&self.unreleased_heading()) {
+                        if section_name.eq_ignore_ascii_case(&self.unreleased_heading(scope)) {
                             node.find_node(|node| matches!(&node.data, Some(MarkdownToken::H3(_))))
                                 .is_some()
                         } else {
@@ -251,6 +287,16 @@ impl Changelog {
             Some(copy)
         } else {
             None
+        }
+    }
+
+    pub fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
+        match self.scopes {
+            Some(scopes) => {
+                // TODO: Implement this?
+                None
+            }
+            None => self.get_contents_of_section_scope(name, None),
         }
     }
 
@@ -306,10 +352,10 @@ impl Changelog {
         Ok(())
     }
 
-    pub fn release(&mut self, version: &SemVer) -> Result<()> {
+    pub fn release(&mut self, version: &SemVer, scope: Option<&PackageJSON>) -> Result<()> {
         let date = Local::now().format("%Y-%m-%d");
 
-        let unreleased_heading = self.unreleased_heading();
+        let unreleased_heading = self.unreleased_heading(scope);
         if let Some(unreleased) = self.root.find_node_mut(|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
                 name.eq_ignore_ascii_case(&unreleased_heading)
@@ -320,8 +366,8 @@ impl Changelog {
             // Convert to the new version
             unreleased.rename_heading(&format!(
                 "[{}] - {}",
-                match self.scope {
-                    Some(ref scope) => format!("{}@{}", scope, version),
+                match scope {
+                    Some(scope) => format!("{}@{}", scope.name(), version),
                     None => format!("{}", version),
                 },
                 date
@@ -369,8 +415,8 @@ impl Changelog {
 
                             // Insert new version reference
                             let new_version_reference = Node::from_token(MarkdownToken::Reference(
-                                match self.scope {
-                                    Some(ref scope) => format!("{}@{}", scope, version),
+                                match scope {
+                                    Some(scope) => format!("{}@{}", scope.name(), version),
                                     None => format!("{}", version),
                                 },
                                 new_link,

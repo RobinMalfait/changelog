@@ -162,7 +162,7 @@ enum Commands {
         /// The version of the release, which can be one of: "major", "minor", "patch", "infer"
         /// (infer from current package.json version) or an explicit version number like "1.2.3"
         #[clap(default_value = "infer")]
-        version: SemVer,
+        version: String,
 
         /// Whether or not to run `npm version <version>` (which in turn updates package.json and
         /// creates a new git tag)
@@ -199,16 +199,21 @@ async fn main() -> Result<()> {
     let pwd = fs::canonicalize(&args.pwd)?;
 
     // Resolve the package.json manifest file
-    let root_pkg = PackageJSON::from_directory(&pwd)?;
+    let root_package = PackageJSON::from_directory(&pwd)?;
 
     // Resolve the current scopes
-    let scopes: Option<Vec<PackageJSON>> = if root_pkg.is_monorepo() {
-        let options = root_pkg.packages()?;
+    let scopes: Option<Vec<PackageJSON>> = if root_package.is_monorepo() {
+        let options = root_package.packages()?;
 
         if args.scopes.is_empty() {
             let resolved_scopes: Vec<PackageJSON> = MultiSelect::new()
                 .with_prompt("Select the package(s) to work on")
-                .items(&options.iter().map(|pkg| pkg.name()).collect::<Vec<_>>())
+                .items(
+                    &options
+                        .iter()
+                        .map(|package| package.name())
+                        .collect::<Vec<_>>(),
+                )
                 .clear(true)
                 .interact()
                 .map(|indexes| {
@@ -226,7 +231,7 @@ async fn main() -> Result<()> {
         } else {
             let resolved_scopes: Vec<PackageJSON> = options
                 .into_iter()
-                .filter(|pkg| args.scopes.iter().any(|scope| pkg.name().eq(scope)))
+                .filter(|package| args.scopes.iter().any(|scope| package.name().eq(scope)))
                 .collect();
 
             Some(resolved_scopes)
@@ -235,7 +240,7 @@ async fn main() -> Result<()> {
         None
     };
 
-    let mut changelog = Changelog::new(&pwd, &args.filename)?;
+    let mut changelog = Changelog::new(&pwd, &args.filename, &scopes)?;
 
     match &args.command {
         Commands::Init => changelog.init(),
@@ -272,11 +277,11 @@ async fn main() -> Result<()> {
             changelog.parse_contents()?;
 
             let messages = if let Some(message) = message {
-                changelog.add_list_item_to_section(name, message.to_string());
+                changelog.add_list_item_to_section(name, &message.to_string());
                 vec![message.to_string()]
             } else if let Some(link) = link {
                 let data: GitHubInfo = link.parse().unwrap();
-                changelog.add_list_item_to_section(name, data.to_string());
+                changelog.add_list_item_to_section(name, &data.to_string());
                 vec![data.to_string()]
             } else {
                 let preface = &format!(
@@ -297,7 +302,7 @@ async fn main() -> Result<()> {
                             .collect();
 
                         for line in &data {
-                            changelog.add_list_item_to_section(name, line.to_string());
+                            changelog.add_list_item_to_section(name, line);
                         }
 
                         if data.is_empty() {
@@ -386,34 +391,69 @@ async fn main() -> Result<()> {
         Commands::Release { version, with_npm } => {
             match &scopes {
                 Some(scopes) => {
-                    for scope in scopes {
-                        // TODO: properly handle the version in a monorepo per package. This means if package A
-                        // is on 0.1.2 and package B is on 0.2.1 and we create a "minor" release than this
-                        // should happen:
-                        // - package A 0.1.2 -> 0.2.0
-                        // - package B 0.2.1 -> 0.3.0
-                        output(format!("Releasing {}", version.to_string().green().bold()));
-                        changelog.parse_contents()?.release(version)?;
+                    let repo = Git::new(Some(&pwd))?;
+                    let changelog = changelog.parse_contents()?;
+                    let mut changelog_commit_messages: Vec<String> = vec![];
+                    let mut output_messages: Vec<String> = vec![];
+
+                    for package in scopes {
+                        let pwd_str = package.pwd().to_str().unwrap();
+                        let mut scope = package.clone();
+                        let package_version = scope.version_mut();
+                        let version = package_version.change_to(version)?;
+
+                        // TODO: Only release when things changed?
+                        // if !changelog.has_changes(&scope) {
+                        //     continue;
+                        // }
+
+                        output_messages.push(format!(
+                            "- Releasing {} for {}",
+                            version.to_string().green().bold(),
+                            scope.name().white().dimmed()
+                        ));
+                        changelog.release(&version, Some(&scope))?;
+
+                        // Commit the CHANGELOG.md file
+                        repo.add(changelog.file_path_str())?;
 
                         if *with_npm {
-                            // Commit the CHANGELOG.md file
-                            Git::new(Some(&pwd))?
-                                .add(changelog.file_path_str())?
-                                .commit(&format!("update changelog ({})", scope.name()))?;
+                            // TODO: Maybe don't call the npm binary and use `serde` instead?
+                            // Execute npm version <version> --no-git-tag-version
+                            Npm::new(Some(pwd_str))?.version_options(&version, true)?;
 
-                            // Execute npm version <version>
-                            Npm::new(Some(&args.pwd))?.version(version)?;
+                            // Commit the `package.json` file
+                            repo.add(pwd_str)?.commit(&format!(
+                                "{} - {}",
+                                &version,
+                                &scope.name()
+                            ))?;
+
+                            // Generate a tag
+                            repo.tag(&format!("{}@v{}", &scope.name(), &version))?;
+                        } else {
+                            changelog_commit_messages.push(format!(
+                                "- Released `{}` for `{}`",
+                                version,
+                                scope.name(),
+                            ));
                         }
                     }
+
+                    // Commit the CHANGELOG.md file
+                    if !changelog_commit_messages.is_empty() {
+                        let _ = &repo.add(changelog.file_path_str())?.commit(&format!(
+                            "update changelog\n\n{}",
+                            changelog_commit_messages.join("\n")
+                        ))?;
+                    }
+
+                    output(output_messages.join("\n"));
                 }
                 None => {
-                    // TODO: properly handle the version in a monorepo per package. This means if package A
-                    // is on 0.1.2 and package B is on 0.2.1 and we create a "minor" release than this
-                    // should happen:
-                    // - package A 0.1.2 -> 0.2.0
-                    // - package B 0.2.1 -> 0.3.0
-                    output(format!("Releasing {}", version.to_string().green().bold()));
-                    changelog.parse_contents()?.release(version)?;
+                    let version: SemVer = version.parse()?;
+                    output(format!("Releasing {}", &version.to_string().green().bold()));
+                    changelog.parse_contents()?.release(&version, None)?;
 
                     if *with_npm {
                         // Commit the CHANGELOG.md file
@@ -422,7 +462,7 @@ async fn main() -> Result<()> {
                             .commit("update changelog")?;
 
                         // Execute npm version <version>
-                        Npm::new(Some(&args.pwd))?.version(version)?;
+                        Npm::new(Some(&args.pwd))?.version(&version)?;
                     }
                 }
             }

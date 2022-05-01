@@ -28,6 +28,41 @@ impl SemVer {
             patch,
         }
     }
+
+    pub fn change_to(&mut self, version: &str) -> Result<Self, Error> {
+        let version = match version {
+            "major" => self.new_major(),
+            "minor" => self.new_minor(),
+            "patch" => self.new_patch(),
+            "infer" => *self,
+            _ => {
+                let mut parts = version.split('.');
+
+                let (major, minor, patch) = match (parts.next(), parts.next(), parts.next()) {
+                    (Some(major), Some(minor), Some(patch)) => (
+                        major.parse::<u64>()?,
+                        minor.parse::<u64>()?,
+                        patch.parse::<u64>()?,
+                    ),
+                    (None, _, _) => {
+                        return Err(eyre!("{} version is missing", "major".blue().bold()))
+                    }
+                    (_, None, _) => {
+                        return Err(eyre!("{} version is missing", "minor".blue().bold()))
+                    }
+                    (_, _, None) => {
+                        return Err(eyre!("{} version is missing", "patch".blue().bold()))
+                    }
+                };
+
+                Self::new(major, minor, patch)
+            }
+        };
+
+        *self = version;
+
+        Ok(*self)
+    }
 }
 
 impl SemVer {
@@ -132,12 +167,20 @@ impl PackageJSON {
         Self::from_directory(&std::env::current_dir()?)
     }
 
+    pub fn pwd(&self) -> &Path {
+        &self.pwd
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
 
     pub fn version(&self) -> &SemVer {
         &self.version
+    }
+
+    pub fn version_mut(&mut self) -> &mut SemVer {
+        &mut self.version
     }
 
     pub fn is_monorepo(&self) -> bool {
