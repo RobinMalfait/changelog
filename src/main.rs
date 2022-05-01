@@ -362,18 +362,47 @@ async fn main() -> Result<()> {
                 }
             }
 
-            if let Some(node) = changelog.get_contents_of_section(&None) {
-                let mut text = node.to_string();
+            match &scopes {
+                Some(scopes) => {
+                    for package in scopes {
+                        output_indented(format!("{}", package.name().white().dimmed()));
+                        eprintln!();
 
-                for message in messages {
-                    text = text.replace(
-                        &format!("- {}", message),
-                        &format!("- {}", message.green().bold()),
-                    );
+                        if let Some(node) =
+                            changelog.get_contents_of_section_scope(None, Some(package))
+                        {
+                            let mut text = node.to_string();
+
+                            for message in &messages {
+                                text = text.replace(
+                                    &format!("- {}", message),
+                                    &format!("- {}", message.green().bold()),
+                                );
+                            }
+
+                            output_indented(text);
+                            eprintln!()
+                        } else {
+                            output_indented("No changes".white().dimmed().italic().to_string());
+                            eprintln!()
+                        }
+                    }
                 }
+                None => {
+                    if let Some(node) = changelog.get_contents_of_section(&None) {
+                        let mut text = node.to_string();
 
-                output_indented(text);
-                eprintln!()
+                        for message in messages {
+                            text = text.replace(
+                                &format!("- {}", message),
+                                &format!("- {}", message.green().bold()),
+                            );
+                        }
+
+                        output_indented(text);
+                        eprintln!()
+                    }
+                }
             }
 
             changelog.persist()?;

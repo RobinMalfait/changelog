@@ -242,9 +242,9 @@ impl<'a> Changelog<'a> {
         }
     }
 
-    fn get_contents_of_section_scope(
+    pub fn get_contents_of_section_scope(
         &self,
-        name: &Option<String>,
+        name: Option<&String>,
         scope: Option<&PackageJSON>,
     ) -> Option<Node> {
         let node = self.root.find_node(|node| {
@@ -292,11 +292,8 @@ impl<'a> Changelog<'a> {
 
     pub fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
         match self.scopes {
-            Some(scopes) => {
-                // TODO: Implement this?
-                None
-            }
-            None => self.get_contents_of_section_scope(name, None),
+            Some(scopes) => None,
+            None => self.get_contents_of_section_scope(name.as_ref(), None),
         }
     }
 
