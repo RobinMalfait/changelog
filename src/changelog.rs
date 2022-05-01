@@ -1,6 +1,6 @@
 use crate::git::Git;
 use crate::github::repo::Repo;
-use crate::output::output;
+use crate::output::{output, output_title};
 use crate::MarkdownToken;
 use crate::Node;
 use crate::PackageJSON;
@@ -256,7 +256,7 @@ impl<'a> Changelog<'a> {
                         } else {
                             match scope {
                                 Some(scope) => section_name.to_lowercase().starts_with(&format!(
-                                    "[{}@{}]",
+                                    "[{}@v{}]",
                                     scope.name(),
                                     name.to_lowercase()
                                 )),
@@ -297,27 +297,60 @@ impl<'a> Changelog<'a> {
         }
     }
 
-    pub fn notes(&self, version: &Option<String>) -> Result<()> {
-        if let Some(node) = self.get_contents_of_section(version) {
-            output(node.to_string());
+    fn notes_scope(&self, version: Option<&String>, scope: Option<&PackageJSON>) -> Result<()> {
+        if let Some(node) = self.get_contents_of_section_scope(version, scope) {
+            match scope {
+                Some(package) => {
+                    output_title(
+                        format!(
+                            "{} {}",
+                            package.name().white().dimmed(),
+                            version.unwrap().to_string().blue()
+                        ),
+                        node.to_string(),
+                    );
+                }
+                None => {
+                    output(node.to_string());
+                }
+            }
         } else {
-            match *version {
-                Some(ref version) => {
+            match version {
+                Some(version) => {
                     output(format!(
-                        "Couldn't find notes for version: {}",
-                        version.blue().bold()
+                        "Couldn't find notes for version: {} {}",
+                        version.blue().bold(),
+                        scope
+                            .map(|scope| format!("({})", scope.name().white().dimmed()))
+                            .unwrap_or_else(|| "".to_string())
                     ));
                 }
                 None => {
                     output(format!(
-                        "Couldn't find notes for version: {}",
-                        "<unknown>".blue().bold()
+                        "Couldn't find notes for version: {} {}",
+                        "<unknown>".blue().bold(),
+                        scope
+                            .map(|scope| format!("({})", scope.name().white().dimmed()))
+                            .unwrap_or_else(|| "".to_string())
                     ));
                 }
             }
         }
 
         Ok(())
+    }
+
+    pub fn notes(&self, version: Option<&String>) -> Result<()> {
+        match &self.scopes {
+            Some(scopes) => {
+                for scope in scopes {
+                    self.notes_scope(version, Some(scope))?;
+                }
+
+                Ok(())
+            }
+            None => self.notes_scope(version, None),
+        }
     }
 
     pub fn list(&self, amount: &Amount, all: &bool) -> Result<()> {

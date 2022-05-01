@@ -18,6 +18,25 @@ pub fn output(str: String) {
     eprintln!()
 }
 
+pub fn output_title(title: String, message: String) {
+    eprintln!();
+
+    if message.contains('\n') {
+        eprintln!(
+            "  {} {}\n",
+            " CHANGELOG ".black().on_bright_blue().bold(),
+            title
+        );
+
+        output_indented(message);
+    } else {
+        eprint!("  {} ", " CHANGELOG ".black().on_bright_blue().bold());
+        println!("{}", message);
+    }
+
+    eprintln!()
+}
+
 pub fn output_indented(str: String) {
     let str = str.trim();
     let lines = str.lines();

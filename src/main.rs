@@ -416,7 +416,7 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
-        Commands::Notes { version } => changelog.parse_contents()?.notes(version),
+        Commands::Notes { version } => changelog.parse_contents()?.notes(version.as_ref()),
         Commands::Release { version, with_npm } => {
             match &scopes {
                 Some(scopes) => {
