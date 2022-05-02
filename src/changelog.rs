@@ -302,11 +302,14 @@ impl<'a> Changelog<'a> {
             match scope {
                 Some(package) => {
                     output_title(
-                        format!(
-                            "{} {}",
-                            package.name().white().dimmed(),
-                            version.unwrap().to_string().blue()
-                        ),
+                        match version {
+                            Some(version) => format!(
+                                "Notes for {} {}",
+                                package.name().white().dimmed(),
+                                version.to_lowercase().blue()
+                            ),
+                            None => format!("Notes for {}", package.name().white().dimmed()),
+                        },
                         node.to_string(),
                     );
                 }
