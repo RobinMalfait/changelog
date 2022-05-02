@@ -292,7 +292,7 @@ impl<'a> Changelog<'a> {
 
     pub fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
         match self.scopes {
-            Some(scopes) => None,
+            Some(_scopes) => None,
             None => self.get_contents_of_section_scope(name.as_ref(), None),
         }
     }
