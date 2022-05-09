@@ -439,7 +439,13 @@ impl<'a> Changelog<'a> {
                         {
                             let (updated_link, new_link) = (
                                 link.clone().replace(old_version, &version.to_string()),
-                                link.clone().replace("HEAD", &format!("v{}", version)),
+                                link.clone().replace(
+                                    "HEAD",
+                                    &match scope {
+                                        Some(scope) => format!("{}@v{}", scope.name(), version),
+                                        None => format!("v{}", version),
+                                    },
+                                ),
                             );
 
                             // Update unreleased_reference
