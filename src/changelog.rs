@@ -1,6 +1,7 @@
 use crate::git::Git;
 use crate::github::repo::Repo;
 use crate::output::{output, output_title};
+use crate::rich_edit;
 use crate::MarkdownToken;
 use crate::Node;
 use crate::PackageJSON;
@@ -225,19 +226,69 @@ impl<'a> Changelog<'a> {
         }
     }
 
-    pub fn add_list_item_to_section(&mut self, section_name: &str, item: &str) {
+    pub fn edit(&self, name: &str, message: &str, scope: Option<&PackageJSON>) -> Option<String> {
+        let contents = &format!(
+            include_str!("./fixtures/edit_entry.txt"),
+            match scope {
+                Some(scope) => format!("# Current scope: '{}'\n\n", scope.name()),
+                None => "".to_string(),
+            },
+            message,
+            name.to_lowercase(),
+        );
+
+        match rich_edit(Some(contents)) {
+            Some(data) => {
+                let data = data.trim();
+                let data = data
+                    .lines()
+                    .into_iter()
+                    .map(|line| line.trim())
+                    .filter(|line| !line.is_empty())
+                    .filter(|line| !line.starts_with('#'))
+                    .map(|line| line.to_string())
+                    .collect::<Vec<String>>()
+                    .join("\n");
+
+                if data.is_empty() {
+                    None
+                } else {
+                    Some(data)
+                }
+            }
+            None => None,
+        }
+    }
+
+    pub fn add_list_item_to_section(&mut self, section_name: &str, item: &str, edit: &bool) {
         match self.scopes {
             Some(scopes) => {
                 for scope in scopes {
                     self.add_list_item_to_section_scope(
                         section_name,
-                        item.to_string(),
+                        match edit {
+                            true => match self.edit(section_name, item, Some(scope)) {
+                                Some(data) => data,
+                                None => item.to_string(),
+                            },
+                            false => item.to_string(),
+                        },
                         Some(scope),
                     );
                 }
             }
             None => {
-                self.add_list_item_to_section_scope(section_name, item.to_string(), None);
+                self.add_list_item_to_section_scope(
+                    section_name,
+                    match edit {
+                        true => match self.edit(section_name, item, None) {
+                            Some(data) => data,
+                            None => item.to_string(),
+                        },
+                        false => item.to_string(),
+                    },
+                    None,
+                );
             }
         }
     }

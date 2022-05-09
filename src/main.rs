@@ -79,6 +79,10 @@ enum Commands {
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
+
+        /// Whether you want to edit the (automated) message after it got fetched from GitHub
+        #[clap(short, long)]
+        edit: bool,
     },
 
     /// Add a new entry to the changelog in the "Fixed" section
@@ -98,6 +102,10 @@ enum Commands {
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
+
+        /// Whether you want to edit the (automated) message after it got fetched from GitHub
+        #[clap(short, long)]
+        edit: bool,
     },
 
     /// Add a new entry to the changelog in the "Changed" section
@@ -117,6 +125,10 @@ enum Commands {
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
+
+        /// Whether you want to edit the (automated) message after it got fetched from GitHub
+        #[clap(short, long)]
+        edit: bool,
     },
 
     /// Add a new entry to the changelog in the "Deprecated" section
@@ -136,6 +148,10 @@ enum Commands {
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
+
+        /// Whether you want to edit the (automated) message after it got fetched from GitHub
+        #[clap(short, long)]
+        edit: bool,
     },
 
     /// Add a new entry to the changelog in the "Removed" section
@@ -155,6 +171,10 @@ enum Commands {
         /// Whether or not to commit the changes
         #[clap(short, long)]
         commit: bool,
+
+        /// Whether you want to edit the (automated) message after it got fetched from GitHub
+        #[clap(short, long)]
+        edit: bool,
     },
 
     /// Release a new version
@@ -249,39 +269,44 @@ async fn main() -> Result<()> {
             message,
             name,
             commit,
+            edit,
         }
         | Commands::Fix {
             link,
             message,
             name,
             commit,
+            edit,
         }
         | Commands::Change {
             link,
             message,
             name,
             commit,
+            edit,
         }
         | Commands::Remove {
             link,
             message,
             name,
             commit,
+            edit,
         }
         | Commands::Deprecate {
             link,
             message,
             name,
             commit,
+            edit,
         } => {
             changelog.parse_contents()?;
 
             let messages = if let Some(message) = message {
-                changelog.add_list_item_to_section(name, &message.to_string());
+                changelog.add_list_item_to_section(name, &message.to_string(), edit);
                 vec![message.to_string()]
             } else if let Some(link) = link {
                 let data: GitHubInfo = link.parse().unwrap();
-                changelog.add_list_item_to_section(name, &data.to_string());
+                changelog.add_list_item_to_section(name, &data.to_string(), edit);
                 vec![data.to_string()]
             } else {
                 let preface = &format!(
@@ -302,7 +327,7 @@ async fn main() -> Result<()> {
                             .collect();
 
                         for line in &data {
-                            changelog.add_list_item_to_section(name, line);
+                            changelog.add_list_item_to_section(name, line, edit);
                         }
 
                         if data.is_empty() {

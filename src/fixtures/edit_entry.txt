@@ -1,0 +1,9 @@
+{}{}
+
+# Edit entry for the "{}" section of the changelog
+#
+# Keep in mind:
+#   - Empty lines will be ignored
+#   - Lines starting with a `#` will be ignored
+#
+# Save and close this file once you are ready!
