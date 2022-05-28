@@ -15,12 +15,12 @@ pub fn rich_edit(contents: Option<&str>) -> Option<String> {
     std::fs::write(file_path, contents.unwrap_or("")).unwrap();
 
     let result = match std::process::Command::new(editor.unwrap())
-        .arg(&file_path)
+        .arg(file_path)
         .status()
     {
         Ok(status) => {
             if status.success() {
-                match std::fs::read_to_string(&file_path) {
+                match std::fs::read_to_string(file_path) {
                     Ok(content) => Some(content),
                     Err(_) => None,
                 }

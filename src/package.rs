@@ -175,10 +175,6 @@ impl PackageJSON {
         &self.name
     }
 
-    pub fn version(&self) -> &SemVer {
-        &self.version
-    }
-
     pub fn version_mut(&mut self) -> &mut SemVer {
         &mut self.version
     }
@@ -205,10 +201,5 @@ impl PackageJSON {
         }
 
         Ok(packages)
-    }
-
-    pub fn package_names(&self) -> Result<Vec<String>> {
-        self.packages()
-            .map(|packages| packages.iter().map(|pkg| pkg.name.clone()).collect())
     }
 }

@@ -7,6 +7,10 @@ pub struct Npm {
     pwd: String,
 }
 
+pub struct Options {
+    pub no_git_tag_version: bool,
+}
+
 impl Npm {
     pub fn new(pwd: Option<&str>) -> Result<Self> {
         match pwd {
@@ -19,16 +23,11 @@ impl Npm {
         }
     }
 
-    pub fn version(&self, version: &SemVer) -> Result<&Self> {
-        self.exec(vec!["version", &version.to_string()])?;
-        Ok(self)
-    }
-
-    pub fn version_options(&self, version: &SemVer, no_git_tag_version: bool) -> Result<&Self> {
+    pub fn version_options(&self, version: &SemVer, options: Options) -> Result<&Self> {
         self.exec(vec![
             "version",
             &version.to_string(),
-            match no_git_tag_version {
+            match options.no_git_tag_version {
                 true => "--no-git-tag-version",
                 false => "",
             },

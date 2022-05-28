@@ -1,6 +1,5 @@
 use crate::git::Git;
 use crate::github::repo::Repo;
-use crate::output::{output, output_title};
 use crate::rich_edit;
 use crate::MarkdownToken;
 use crate::Node;
@@ -17,36 +16,40 @@ use std::str::FromStr;
 const UNRELEASED_HEADING: &str = "Unreleased";
 
 #[derive(Debug, Clone)]
-pub struct Changelog<'a> {
-    scopes: &'a Option<Vec<PackageJSON>>,
+pub struct Changelog {
     pwd: PathBuf,
     file_path: PathBuf,
-    filename: String,
     root: Node,
 }
 
-impl<'a> Changelog<'a> {
-    pub fn new(
-        pwd: &Path,
-        filename: &str,
-        //      None => when it is not a monorepo
-        // Some(vec) => when it is a monorepo
-        scopes: &'a Option<Vec<PackageJSON>>,
-    ) -> Result<Self> {
+impl Changelog {
+    pub fn new(pwd: &Path, filename: &str) -> Result<Self> {
         let pwd = fs::canonicalize(pwd)?;
         let file_path = pwd.join(filename);
+        let root = match std::fs::metadata(&file_path).is_ok() {
+            true => {
+                let contents = fs::read_to_string(&file_path)?;
+                let root: Node = contents.parse()?;
+                root
+            }
+            false => Node::empty(),
+        };
 
         Ok(Changelog {
-            scopes,
             pwd,
             file_path,
-            filename: filename.to_string(),
-            root: Node::empty(),
+            root,
         })
     }
 
     pub fn file_path_str(&self) -> &str {
         self.file_path.to_str().unwrap()
+    }
+
+    pub fn relative_path(&self) -> Result<String> {
+        Ok(self
+            .file_path_str()
+            .replace(std::env::current_dir()?.to_str().unwrap(), "."))
     }
 
     pub fn unreleased_heading(&self, scope: Option<&PackageJSON>) -> String {
@@ -56,41 +59,20 @@ impl<'a> Changelog<'a> {
         }
     }
 
-    pub fn parse_contents(&mut self) -> Result<&mut Self> {
-        let meta = fs::metadata(&self.file_path);
-        if meta.is_err() {
-            return Err(eyre!(
-                "Changelog file does not exist at '{}', run `changelog init` to initialize a new {} file",
-                self.file_path.display().to_string(),
-                self.filename
-            ));
-        }
-
-        let contents = fs::read_to_string(&self.file_path)?;
-        let root: Node = contents.parse()?;
-        self.root = root;
-
-        Ok(self)
-    }
-
-    pub fn init(&mut self) -> Result<()> {
+    pub fn init(&mut self) -> Result<String> {
         let meta = fs::metadata(&self.file_path);
 
         if meta.is_ok() {
-            output(format!(
+            Ok(format!(
                 "Changelog already exists at: {}",
-                self.file_path_str().white().dimmed()
-            ));
-
-            Ok(())
+                &self.relative_path()?.white().dimmed()
+            ))
         } else {
             if !Git::new(Some(&self.pwd))?.is_git_repo() {
-                output(format!(
+                return Ok(format!(
                     "Not a git repository: {}",
                     self.pwd.to_str().unwrap().white().dimmed()
                 ));
-
-                return Ok(());
             }
 
             let date = Local::now().format("%Y-%m-%d");
@@ -105,12 +87,12 @@ impl<'a> Changelog<'a> {
 
             self.root = root;
 
-            output(format!(
-                "Created new changelog file at: {}",
-                self.file_path.to_str().unwrap().white().dimmed()
-            ));
-
-            self.persist()
+            self.persist().map(|_| {
+                format!(
+                    "Created new changelog file at: {}",
+                    &self.relative_path().unwrap().white().dimmed()
+                )
+            })
         }
     }
 
@@ -121,14 +103,10 @@ impl<'a> Changelog<'a> {
         }
     }
 
-    fn find_latest_version_scope(&self, scope: Option<&PackageJSON>) -> Option<&str> {
+    fn find_latest_version(&self) -> Option<&str> {
         if let Some(node) = self.root.find_node(|node| {
             if let Some(MarkdownToken::Reference(name, _)) = &node.data {
                 !name.to_lowercase().starts_with("unreleased")
-                    && match scope {
-                        Some(scope) => name.to_lowercase().contains(scope.name()),
-                        None => true,
-                    }
             } else {
                 false
             }
@@ -139,10 +117,6 @@ impl<'a> Changelog<'a> {
         }
 
         None
-    }
-
-    pub fn find_latest_version(&self) -> Option<&str> {
-        self.find_latest_version_scope(None)
     }
 
     // TODO: This is horrible... refactor this!
@@ -260,37 +234,24 @@ impl<'a> Changelog<'a> {
         }
     }
 
-    pub fn add_list_item_to_section(&mut self, section_name: &str, item: &str, edit: &bool) {
-        match self.scopes {
-            Some(scopes) => {
-                for scope in scopes {
-                    self.add_list_item_to_section_scope(
-                        section_name,
-                        match edit {
-                            true => match self.edit(section_name, item, Some(scope)) {
-                                Some(data) => data,
-                                None => item.to_string(),
-                            },
-                            false => item.to_string(),
-                        },
-                        Some(scope),
-                    );
-                }
-            }
-            None => {
-                self.add_list_item_to_section_scope(
-                    section_name,
-                    match edit {
-                        true => match self.edit(section_name, item, None) {
-                            Some(data) => data,
-                            None => item.to_string(),
-                        },
-                        false => item.to_string(),
-                    },
-                    None,
-                );
-            }
-        }
+    pub fn add_list_item_to_section(
+        &mut self,
+        section_name: &str,
+        item: &str,
+        edit: &bool,
+        scope: Option<&PackageJSON>,
+    ) {
+        self.add_list_item_to_section_scope(
+            section_name,
+            match edit {
+                true => match self.edit(section_name, item, scope) {
+                    Some(data) => data,
+                    None => item.to_string(),
+                },
+                false => item.to_string(),
+            },
+            None,
+        );
     }
 
     pub fn get_contents_of_section_scope(
@@ -342,72 +303,39 @@ impl<'a> Changelog<'a> {
     }
 
     pub fn get_contents_of_section(&self, name: &Option<String>) -> Option<Node> {
-        match self.scopes {
-            Some(_scopes) => None,
-            None => self.get_contents_of_section_scope(name.as_ref(), None),
-        }
+        self.get_contents_of_section_scope(name.as_ref(), None)
     }
 
-    fn notes_scope(&self, version: Option<&String>, scope: Option<&PackageJSON>) -> Result<()> {
-        if let Some(node) = self.get_contents_of_section_scope(version, scope) {
-            match scope {
-                Some(package) => {
-                    output_title(
-                        match version {
-                            Some(version) => format!(
-                                "Notes for {} {}",
-                                package.name().white().dimmed(),
-                                version.to_lowercase().blue()
-                            ),
-                            None => format!("Notes for {}", package.name().white().dimmed()),
-                        },
-                        node.to_string(),
-                    );
-                }
-                None => {
-                    output(node.to_string());
-                }
-            }
-        } else {
-            match version {
-                Some(version) => {
-                    output(format!(
+    fn notes_scope(&self, version: Option<&String>, scope: Option<&PackageJSON>) -> Result<String> {
+        Ok(
+            if let Some(node) = self.get_contents_of_section_scope(version, scope) {
+                node.to_string()
+            } else {
+                match version {
+                    Some(version) => format!(
                         "Couldn't find notes for version: {} {}",
                         version.blue().bold(),
                         scope
                             .map(|scope| format!("({})", scope.name().white().dimmed()))
                             .unwrap_or_else(|| "".to_string())
-                    ));
-                }
-                None => {
-                    output(format!(
+                    ),
+                    None => format!(
                         "Couldn't find notes for version: {} {}",
                         "<unknown>".blue().bold(),
                         scope
                             .map(|scope| format!("({})", scope.name().white().dimmed()))
                             .unwrap_or_else(|| "".to_string())
-                    ));
+                    ),
                 }
-            }
-        }
-
-        Ok(())
+            },
+        )
     }
 
-    pub fn notes(&self, version: Option<&String>) -> Result<()> {
-        match &self.scopes {
-            Some(scopes) => {
-                for scope in scopes {
-                    self.notes_scope(version, Some(scope))?;
-                }
-
-                Ok(())
-            }
-            None => self.notes_scope(version, None),
-        }
+    pub fn notes(&self, version: Option<&String>) -> Result<String> {
+        self.notes_scope(version, None)
     }
 
-    pub fn list(&self, amount: &Amount, all: &bool) -> Result<()> {
+    pub fn list(&self, amount: &Amount, all: &bool) -> Result<String> {
         let releases = self
             .root
             .filter_nodes(|node| matches!(&node.data, Some(MarkdownToken::Reference(_, _))))
@@ -428,18 +356,17 @@ impl<'a> Changelog<'a> {
             .join("\n");
 
         if releases.is_empty() {
-            output("There are no releases yet.".to_string());
+            Ok("There are no releases yet.".to_string())
         } else {
-            output(releases)
+            Ok(releases)
         }
-
-        Ok(())
     }
 
     pub fn release(&mut self, version: &SemVer, scope: Option<&PackageJSON>) -> Result<()> {
         let date = Local::now().format("%Y-%m-%d");
 
-        let unreleased_heading = self.unreleased_heading(scope);
+        let unreleased_heading = self.unreleased_heading(None);
+
         if let Some(unreleased) = self.root.find_node_mut(|node| {
             if let Some(MarkdownToken::H2(name)) = &node.data {
                 name.eq_ignore_ascii_case(&unreleased_heading)
@@ -448,14 +375,7 @@ impl<'a> Changelog<'a> {
             }
         }) {
             // Convert to the new version
-            unreleased.rename_heading(&format!(
-                "[{}] - {}",
-                match scope {
-                    Some(scope) => format!("{}@{}", scope.name(), version),
-                    None => format!("{}", version),
-                },
-                date
-            ));
+            unreleased.rename_heading(&format!("[{}] - {}", version, date));
 
             // Insert new [Unreleased] section at the top
             let mut new_unreleased =
@@ -505,10 +425,7 @@ impl<'a> Changelog<'a> {
 
                             // Insert new version reference
                             let new_version_reference = Node::from_token(MarkdownToken::Reference(
-                                match scope {
-                                    Some(scope) => format!("{}@{}", scope.name(), version),
-                                    None => format!("{}", version),
-                                },
+                                version.to_string(),
                                 new_link,
                             ));
 

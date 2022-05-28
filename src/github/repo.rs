@@ -26,7 +26,7 @@ impl Repo {
                     .split('/')
                     .collect::<Vec<&str>>();
 
-                match (parts.get(0), parts.get(1)) {
+                match (parts.first(), parts.get(1)) {
                     (Some(owner), Some(repo)) => Ok(Self::new(owner.to_string(), repo.to_string())),
                     _ => Err(eyre!("Could not parse git remote url")),
                 }
