@@ -1,6 +1,5 @@
 use crate::git::Git;
-use crate::github::github_url::GitHubURL;
-use crate::github::repo::Repo;
+use crate::github::{github_url::GitHubURL, repo::Repo};
 use crate::graphql::graphql;
 use color_eyre::eyre::Result;
 use serde_json::json;
@@ -82,10 +81,7 @@ impl FromStr for Commit {
                 // TODO: Get from root
                 let pwd = std::fs::canonicalize(".").expect("File path doesn't seem to exist");
 
-                match Commit::from_local_commit(&pwd, s) {
-                    Ok(commit) => Ok(commit),
-                    Err(e) => Err(e.to_string()),
-                }
+                Commit::from_local_commit(&pwd, s).map_err(|e| e.to_string())
             }
         }
     }

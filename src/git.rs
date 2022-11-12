@@ -26,18 +26,11 @@ impl Git {
     }
 
     pub fn commit_message(&self, hash: &str) -> Result<String> {
-        match self.exec(vec!["log", "-1", "--format=%B", hash]) {
-            Ok(msg) => {
-                if msg.is_empty() {
-                    Err(eyre!("No commit message found"))
-                } else {
-                    let msg = msg.trim().split('\n').next().unwrap_or(&msg);
-
-                    Ok(msg.to_string())
-                }
-            }
-            Err(e) => Err(e),
-        }
+        self.exec(vec!["log", "-1", "--format=%B", hash])
+            .and_then(|msg| match msg.is_empty() {
+                true => Err(eyre!("No commit message found")),
+                false => Ok(msg.trim().split('\n').next().unwrap_or(&msg).to_string()),
+            })
     }
 
     pub fn is_git_repo(&self) -> bool {

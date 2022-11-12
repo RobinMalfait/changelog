@@ -13,22 +13,16 @@ use crate::changelog::{Amount, Changelog};
 use crate::git::Git;
 use crate::github::github_info::GitHubInfo;
 use crate::list_format::conjunction;
-use crate::markdown::ast::Node;
-use crate::markdown::tokens::MarkdownToken;
-use crate::npm::Npm;
-use crate::npm::Options;
+use crate::markdown::{ast::Node, tokens::MarkdownToken};
+use crate::npm::{Npm, Options};
 use crate::output::{output, output_indented, output_title};
-use crate::package::PackageJSON;
-use crate::package::SemVer;
+use crate::package::{PackageJSON, SemVer};
 use crate::rich_edit::rich_edit;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{eyre, Result};
 use colored::*;
 use dialoguer::MultiSelect;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::fs;
-use std::path::PathBuf;
+use std::{collections::HashMap, fmt::Debug, fs, path::PathBuf};
 
 /// Make CHANGELOG.md changes easier
 #[derive(Parser, Debug)]

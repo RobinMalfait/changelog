@@ -3,8 +3,7 @@ use colored::*;
 use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Semantic Versioning 2.0.0: https://semver.org
@@ -90,18 +89,9 @@ impl FromStr for SemVer {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "major" => {
-                let pkg = PackageJSON::from_current_directory()?;
-                Ok(pkg.version.new_major())
-            }
-            "minor" => {
-                let pkg = PackageJSON::from_current_directory()?;
-                Ok(pkg.version.new_minor())
-            }
-            "patch" => {
-                let pkg = PackageJSON::from_current_directory()?;
-                Ok(pkg.version.new_patch())
-            }
+            "major" => Ok(PackageJSON::from_current_directory()?.version.new_major()),
+            "minor" => Ok(PackageJSON::from_current_directory()?.version.new_minor()),
+            "patch" => Ok(PackageJSON::from_current_directory()?.version.new_patch()),
             "infer" => Ok(PackageJSON::from_current_directory()?.version),
             _ => {
                 let mut parts = s.split('.');

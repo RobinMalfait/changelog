@@ -1,5 +1,4 @@
-use crate::github::github_url::GitHubURL;
-use crate::github::repo::Repo;
+use crate::github::{github_url::GitHubURL, repo::Repo};
 use crate::graphql::graphql;
 use serde_json::json;
 use std::fmt::{Debug, Display};

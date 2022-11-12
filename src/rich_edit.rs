@@ -20,10 +20,7 @@ pub fn rich_edit(contents: Option<&str>) -> Option<String> {
     {
         Ok(status) => {
             if status.success() {
-                match std::fs::read_to_string(file_path) {
-                    Ok(content) => Some(content),
-                    Err(_) => None,
-                }
+                std::fs::read_to_string(file_path).ok()
             } else {
                 None
             }

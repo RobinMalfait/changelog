@@ -1,7 +1,6 @@
-use crate::github::commit::Commit;
-use crate::github::discussion::Discussion;
-use crate::github::issue::Issue;
-use crate::github::pull_request::PullRequest;
+use crate::github::{
+    commit::Commit, discussion::Discussion, issue::Issue, pull_request::PullRequest,
+};
 use std::fmt::Display;
 use std::str::FromStr;
 

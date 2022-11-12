@@ -31,7 +31,7 @@ impl Repo {
                     _ => Err(eyre!("Could not parse git remote url")),
                 }
             }
-            Err(e) => Err(eyre!(format!("Failed running git: {}", e))),
+            Err(e) => Err(eyre!("Failed running git: {}", e)),
         }
     }
 }

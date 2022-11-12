@@ -38,19 +38,13 @@ impl FromStr for GitHubURL {
         // Dynamic parts
         while let (Some(key), Some(value)) = (segments.next(), segments.next()) {
             match key {
-                "commits" | "commit" => {
-                    parts.insert("commit".to_string(), value.to_string());
-                }
+                "commits" | "commit" => parts.insert("commit".to_string(), value.to_string()),
                 "discussions" | "discussion" => {
-                    parts.insert("discussion".to_string(), value.to_string());
+                    parts.insert("discussion".to_string(), value.to_string())
                 }
-                "issues" | "issue" => {
-                    parts.insert("issue".to_string(), value.to_string());
-                }
-                _ => {
-                    parts.insert(key.to_string(), value.to_string());
-                }
-            }
+                "issues" | "issue" => parts.insert("issue".to_string(), value.to_string()),
+                _ => parts.insert(key.to_string(), value.to_string()),
+            };
         }
 
         Ok(Self {

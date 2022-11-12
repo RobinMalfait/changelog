@@ -70,14 +70,12 @@ impl Changelog {
         let date = Local::now().format("%Y-%m-%d");
         let repo = Repo::from_git_repo(&self.pwd)?;
 
-        let root: Node = include_str!("./fixtures/changelog.md")
+        self.root = include_str!("./fixtures/changelog.md")
             .to_string()
             .replace("<date>", &date.to_string())
             .replace("<owner>", &repo.org)
             .replace("<repo>", &repo.repo)
             .parse()?;
-
-        self.root = root;
 
         self.persist().map(|_| {
             format!(
@@ -115,12 +113,9 @@ impl Changelog {
         scope: Option<&PackageJSON>,
     ) {
         let unreleased_heading = self.unreleased_heading(scope);
-        let unreleased = self.root.find_node_mut(|node| {
-            if let Some(MarkdownToken::H2(name)) = &node.data {
-                name.eq_ignore_ascii_case(&unreleased_heading)
-            } else {
-                false
-            }
+        let unreleased = self.root.find_node_mut(|node| match &node.data {
+            Some(MarkdownToken::H2(name)) => name.eq_ignore_ascii_case(&unreleased_heading),
+            _ => false,
         });
 
         if let Some(unreleased) = unreleased {
@@ -134,12 +129,9 @@ impl Changelog {
                 unreleased.children.remove(nothing_yet_ul);
             }
 
-            let section = unreleased.find_node_mut(|node| {
-                if let Some(MarkdownToken::H3(name)) = &node.data {
-                    name.eq_ignore_ascii_case(section_name)
-                } else {
-                    false
-                }
+            let section = unreleased.find_node_mut(|node| match &node.data {
+                Some(MarkdownToken::H3(name)) => name.eq_ignore_ascii_case(section_name),
+                _ => false,
             });
 
             if let Some(section) = section {
@@ -381,15 +373,14 @@ impl Changelog {
             let c = self.clone();
             match c.find_latest_version() {
                 Some(old_version) => {
-                    if let Some(unreleased_reference) = self.root.find_node_mut(|node| {
-                        if let Some(MarkdownToken::Reference(name, _)) = &node.data {
-                            name.eq_ignore_ascii_case(
+                    if let Some(unreleased_reference) =
+                        self.root.find_node_mut(|node| match &node.data {
+                            Some(MarkdownToken::Reference(name, _)) => name.eq_ignore_ascii_case(
                                 &unreleased_heading[1..unreleased_heading.len() - 1],
-                            )
-                        } else {
-                            false
-                        }
-                    }) {
+                            ),
+                            _ => false,
+                        })
+                    {
                         if let Some(MarkdownToken::Reference(name, link)) =
                             &unreleased_reference.data
                         {
@@ -414,19 +405,14 @@ impl Changelog {
                                 new_link,
                             ));
 
-                            match self.root.children.iter().position(|node| {
-                                if let Some(MarkdownToken::Reference(name, _)) = &node.data {
+                            match self.root.children.iter().position(|node| match &node.data {
+                                Some(MarkdownToken::Reference(name, _)) => {
                                     !name.to_lowercase().starts_with("unreleased")
-                                } else {
-                                    false
                                 }
+                                _ => false,
                             }) {
-                                Some(idx) => {
-                                    self.root.add_child_at(idx, new_version_reference);
-                                }
-                                None => {
-                                    self.root.add_child(new_version_reference);
-                                }
+                                Some(idx) => self.root.add_child_at(idx, new_version_reference),
+                                None => self.root.add_child(new_version_reference),
                             }
                         }
                     }
