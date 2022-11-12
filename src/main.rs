@@ -333,7 +333,7 @@ async fn main() -> Result<()> {
                             changelog.add_list_item_to_section(
                                 name,
                                 &message.to_string(),
-                                edit,
+                                *edit,
                                 Some(package),
                             );
                             vec![message.to_string()]
@@ -342,7 +342,7 @@ async fn main() -> Result<()> {
                             changelog.add_list_item_to_section(
                                 name,
                                 &data.to_string(),
-                                edit,
+                                *edit,
                                 Some(package),
                             );
                             vec![data.to_string()]
@@ -368,7 +368,7 @@ async fn main() -> Result<()> {
                                         changelog.add_list_item_to_section(
                                             name,
                                             line,
-                                            edit,
+                                            *edit,
                                             Some(package),
                                         );
                                     }
@@ -469,11 +469,11 @@ async fn main() -> Result<()> {
                     let mut changelog = Changelog::new(&pwd, &args.filename)?;
 
                     let messages = if let Some(message) = message {
-                        changelog.add_list_item_to_section(name, &message.to_string(), edit, None);
+                        changelog.add_list_item_to_section(name, &message.to_string(), *edit, None);
                         vec![message.to_string()]
                     } else if let Some(link) = link {
                         let data: GitHubInfo = link.parse().unwrap();
-                        changelog.add_list_item_to_section(name, &data.to_string(), edit, None);
+                        changelog.add_list_item_to_section(name, &data.to_string(), *edit, None);
                         vec![data.to_string()]
                     } else {
                         let preface = &format!(
@@ -494,7 +494,7 @@ async fn main() -> Result<()> {
                                     .collect();
 
                                 for line in &data {
-                                    changelog.add_list_item_to_section(name, line, edit, None);
+                                    changelog.add_list_item_to_section(name, line, *edit, None);
                                 }
 
                                 if data.is_empty() {
@@ -706,11 +706,16 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Commands::List { amount, all } => {
+            let amount = match &all {
+                true => Amount::All,
+                false => *amount,
+            };
+
             match scopes {
                 Some(scopes) => {
                     for package in scopes {
                         let message = Changelog::new(package.pwd(), &args.filename)?
-                            .list(amount, all)
+                            .list(amount)
                             .unwrap_or_else(|err| err.to_string().red().to_string());
 
                         output_title(
@@ -720,7 +725,7 @@ async fn main() -> Result<()> {
                     }
                 }
                 None => {
-                    output(Changelog::new(&pwd, &args.filename)?.list(amount, all)?);
+                    output(Changelog::new(&pwd, &args.filename)?.list(amount)?);
                 }
             }
 

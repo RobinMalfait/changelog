@@ -1,17 +1,12 @@
-use crate::git::Git;
-use crate::github::repo::Repo;
-use crate::rich_edit;
-use crate::MarkdownToken;
-use crate::Node;
-use crate::PackageJSON;
-use crate::SemVer;
+use crate::{git::Git, github::repo::Repo, rich_edit, MarkdownToken, Node, PackageJSON, SemVer};
 use chrono::prelude::*;
 use color_eyre::eyre::{eyre, Result};
 use colored::*;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 const UNRELEASED_HEADING: &str = "Unreleased";
 
@@ -27,11 +22,7 @@ impl Changelog {
         let pwd = fs::canonicalize(pwd)?;
         let file_path = pwd.join(filename);
         let root = match std::fs::metadata(&file_path).is_ok() {
-            true => {
-                let contents = fs::read_to_string(&file_path)?;
-                let root: Node = contents.parse()?;
-                root
-            }
+            true => fs::read_to_string(&file_path)?.parse()?,
             false => Node::empty(),
         };
 
@@ -63,44 +54,41 @@ impl Changelog {
         let meta = fs::metadata(&self.file_path);
 
         if meta.is_ok() {
-            Ok(format!(
+            return Ok(format!(
                 "Changelog already exists at: {}",
                 &self.relative_path()?.white().dimmed()
-            ))
-        } else {
-            if !Git::new(Some(&self.pwd))?.is_git_repo() {
-                return Ok(format!(
-                    "Not a git repository: {}",
-                    self.pwd.to_str().unwrap().white().dimmed()
-                ));
-            }
-
-            let date = Local::now().format("%Y-%m-%d");
-            let repo = Repo::from_git_repo(&self.pwd)?;
-
-            let root: Node = include_str!("./fixtures/changelog.md")
-                .to_string()
-                .replace("<date>", &date.to_string())
-                .replace("<owner>", &repo.org)
-                .replace("<repo>", &repo.repo)
-                .parse()?;
-
-            self.root = root;
-
-            self.persist().map(|_| {
-                format!(
-                    "Created new changelog file at: {}",
-                    &self.relative_path().unwrap().white().dimmed()
-                )
-            })
+            ));
         }
+
+        if !Git::new(Some(&self.pwd))?.is_git_repo() {
+            return Ok(format!(
+                "Not a git repository: {}",
+                self.pwd.to_str().unwrap().white().dimmed()
+            ));
+        }
+
+        let date = Local::now().format("%Y-%m-%d");
+        let repo = Repo::from_git_repo(&self.pwd)?;
+
+        let root: Node = include_str!("./fixtures/changelog.md")
+            .to_string()
+            .replace("<date>", &date.to_string())
+            .replace("<owner>", &repo.org)
+            .replace("<repo>", &repo.repo)
+            .parse()?;
+
+        self.root = root;
+
+        self.persist().map(|_| {
+            format!(
+                "Created new changelog file at: {}",
+                &self.relative_path().unwrap().white().dimmed()
+            )
+        })
     }
 
     pub fn persist(&self) -> Result<()> {
-        match fs::write(&self.file_path, self.root.to_string() + "\n") {
-            Ok(_) => Ok(()),
-            Err(e) => Err(eyre!(e)),
-        }
+        fs::write(&self.file_path, self.root.to_string() + "\n").map_err(|e| eyre!(e))
     }
 
     fn find_latest_version(&self) -> Option<&str> {
@@ -238,7 +226,7 @@ impl Changelog {
         &mut self,
         section_name: &str,
         item: &str,
-        edit: &bool,
+        edit: bool,
         scope: Option<&PackageJSON>,
     ) {
         self.add_list_item_to_section_scope(
@@ -335,18 +323,15 @@ impl Changelog {
         self.notes_scope(version, None)
     }
 
-    pub fn list(&self, amount: &Amount, all: &bool) -> Result<String> {
+    pub fn list(&self, amount: Amount) -> Result<String> {
         let releases = self
             .root
             .filter_nodes(|node| matches!(&node.data, Some(MarkdownToken::Reference(_, _))))
             .iter()
             .filter_map(|node| node.data.as_ref())
-            .take(match all {
-                true => std::usize::MAX,
-                false => match *amount {
-                    Amount::All => std::usize::MAX,
-                    Amount::Value(x) => x,
-                },
+            .take(match amount {
+                Amount::All => std::usize::MAX,
+                Amount::Value(x) => x,
             })
             .map(|token| match token {
                 MarkdownToken::Reference(name, link) => format!("- {:15} {}", name, link),
@@ -458,7 +443,7 @@ impl Changelog {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Amount {
     All,
     Value(usize),
@@ -468,11 +453,153 @@ impl FromStr for Amount {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "all" => Ok(Amount::All),
-            _ => Ok(Amount::Value(
-                s.parse::<usize>().map_err(|_| "Invalid amount")?,
-            )),
-        }
+        Ok(match s {
+            "all" => Amount::All,
+            _ => Amount::Value(s.parse::<usize>().map_err(|_| "Invalid amount")?),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_should_find_the_latest_version() {
+        let c = Changelog {
+            root: Node::from_str(include_str!("../CHANGELOG.md")).unwrap(),
+            pwd: PathBuf::default(),
+            file_path: PathBuf::default(),
+        };
+
+        let latest_version = c.find_latest_version();
+        assert_eq!(latest_version, Some("0.1.0"));
+    }
+
+    #[test]
+    fn it_should_get_the_contents_of_a_section() {
+        let c = Changelog {
+            root: Node::from_str(include_str!("../CHANGELOG.md")).unwrap(),
+            pwd: PathBuf::default(),
+            file_path: PathBuf::default(),
+        };
+
+        let unreleased_section = c.get_contents_of_section(&Some("unreleased".to_string()));
+        assert!(unreleased_section.is_some());
+
+        let unreleased_section = unreleased_section.unwrap();
+        assert_eq!(
+            unreleased_section,
+            Node::from_str("- Nothing yet!").unwrap()
+        );
+
+        let first_release = c.get_contents_of_section(&Some("0.1.0".to_string()));
+        assert!(first_release.is_some());
+
+        let first_release = first_release.unwrap();
+        assert_eq!(
+            first_release,
+            Node::from_str("### Added\n- Everything!").unwrap()
+        );
+    }
+
+    #[test]
+    fn it_should_generate_a_list_of_releases() {
+        let c = Changelog {
+            root: Node::from_str(include_str!("../CHANGELOG.md")).unwrap(),
+            pwd: PathBuf::default(),
+            file_path: PathBuf::default(),
+        };
+
+        assert_eq!(
+            c.list(Amount::All).unwrap(),
+            vec![
+                "- unreleased      https://github.com/RobinMalfait/changelog/compare/v0.1.0...HEAD",
+                "- 0.1.0           https://github.com/RobinMalfait/changelog/releases/tag/v0.1.0",
+            ]
+            .join("\n")
+        );
+    }
+
+    #[test]
+    fn it_should_be_possible_to_add_something_to_a_section() {
+        let mut c = Changelog {
+            root: Node::from_str(include_str!("../CHANGELOG.md")).unwrap(),
+            pwd: PathBuf::default(),
+            file_path: PathBuf::default(),
+        };
+
+        let unreleased_section = c.get_contents_of_section(&Some("unreleased".to_string()));
+        assert!(unreleased_section.is_some());
+        let unreleased_section = unreleased_section.unwrap();
+
+        assert_eq!(
+            unreleased_section,
+            Node {
+                data: None,
+                children: vec![Node {
+                    data: Some(MarkdownToken::UnorderedList,),
+                    children: vec![Node {
+                        data: Some(MarkdownToken::ListItem("Nothing yet!".to_string(), 0)),
+                        children: vec![],
+                    }],
+                }],
+            }
+        );
+
+        c.add_list_item_to_section("Added", "Something new", false, None);
+
+        let unreleased_section = c.get_contents_of_section(&Some("unreleased".to_string()));
+        assert!(unreleased_section.is_some());
+        let unreleased_section = unreleased_section.unwrap();
+
+        assert_eq!(
+            unreleased_section,
+            Node {
+                data: None,
+                children: vec![Node {
+                    data: Some(MarkdownToken::H3("Added".to_string())),
+                    children: vec![Node {
+                        data: Some(MarkdownToken::UnorderedList),
+                        children: vec![Node {
+                            data: Some(MarkdownToken::ListItem("Something new".to_string(), 0)),
+                            children: vec![],
+                        }],
+                    }],
+                }],
+            }
+        );
+
+        c.add_list_item_to_section("Added", "Something newer", false, None);
+
+        let unreleased_section = c.get_contents_of_section(&Some("unreleased".to_string()));
+        assert!(unreleased_section.is_some());
+        let unreleased_section = unreleased_section.unwrap();
+
+        assert_eq!(
+            unreleased_section,
+            Node {
+                data: None,
+                children: vec![Node {
+                    data: Some(MarkdownToken::H3("Added".to_string())),
+                    children: vec![Node {
+                        data: Some(MarkdownToken::UnorderedList),
+                        children: vec![
+                            Node {
+                                data: Some(MarkdownToken::ListItem("Something new".to_string(), 0)),
+                                children: vec![],
+                            },
+                            Node {
+                                data: Some(MarkdownToken::ListItem(
+                                    "Something newer".to_string(),
+                                    0
+                                )),
+                                children: vec![],
+                            }
+                        ],
+                    }],
+                }],
+            }
+        );
     }
 }

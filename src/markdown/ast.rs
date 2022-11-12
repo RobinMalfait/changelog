@@ -3,7 +3,7 @@ use color_eyre::eyre::Error;
 use std::fmt::Display;
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Node {
     pub data: Option<MarkdownToken>,
     pub children: Vec<Node>,
