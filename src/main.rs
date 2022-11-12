@@ -574,17 +574,33 @@ async fn main() -> Result<()> {
                         output_title(
                             match version {
                                 Some(version) => format!(
-                                    "Notes for {} {}",
+                                    "Notes for {}, {}",
                                     package.name().white().dimmed(),
                                     version.to_lowercase().blue()
                                 ),
-                                None => format!("Notes for {}", package.name().white().dimmed()),
+                                None => format!(
+                                    "Notes for {}, {}",
+                                    package.name().white().dimmed(),
+                                    "latest".blue()
+                                ),
                             },
                             message,
                         )
                     }
                 }
-                None => output(Changelog::new(&pwd, &args.filename)?.notes(version.as_ref())?),
+                None => {
+                    let message = Changelog::new(&pwd, &args.filename)?
+                        .notes(version.as_ref())
+                        .unwrap_or_else(|err| err.to_string().red().to_string());
+
+                    output_title(
+                        match version {
+                            Some(version) => format!("Notes for {}", version.to_lowercase().blue()),
+                            None => format!("Notes for {}", "latest".blue()),
+                        },
+                        message,
+                    )
+                }
             }
 
             Ok(())
