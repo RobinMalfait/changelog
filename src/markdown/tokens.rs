@@ -23,8 +23,8 @@ impl MarkdownToken {
                     .lines()
                     .map(|line| {
                         let spaces = line.chars().take_while(|c| c.is_whitespace()).count();
-                        let line = line.trim_start();
-                        match line {
+                        let l = line.trim_start();
+                        match l {
                             line if line.starts_with("# ") => {
                                 MarkdownToken::H1(line[2..].to_string())
                             }
@@ -46,7 +46,7 @@ impl MarkdownToken {
                                     link.to_string(),
                                 )
                             }
-                            _ => MarkdownToken::Paragraph(line.to_string()),
+                            _ => MarkdownToken::Paragraph(l.to_string()),
                         }
                     })
                     .collect(),

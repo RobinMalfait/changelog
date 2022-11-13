@@ -34,10 +34,9 @@ impl Git {
     }
 
     pub fn is_git_repo(&self) -> bool {
-        match self.exec(vec!["rev-parse", "--is-inside-work-tree"]) {
-            Ok(output) => output.trim() == "true",
-            Err(_) => false,
-        }
+        self.exec(vec!["rev-parse", "--is-inside-work-tree"])
+            .map(|output| output.trim() == "true")
+            .unwrap_or(false)
     }
 
     pub fn add(&self, path: &str) -> Result<&Self> {
