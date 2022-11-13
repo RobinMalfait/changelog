@@ -349,7 +349,7 @@ async fn main() -> Result<()> {
                             let data = match rich_edit(Some(preface)) {
                                 Some(data) => {
                                     let data = data.trim();
-                                    let data: Vec<String> = data
+                                    let data: Vec<_> = data
                                         .lines()
                                         .into_iter()
                                         .map(|line| line.trim())
@@ -478,7 +478,7 @@ async fn main() -> Result<()> {
                         let data = match rich_edit(Some(preface)) {
                             Some(data) => {
                                 let data = data.trim();
-                                let data: Vec<String> = data
+                                let data: Vec<_> = data
                                     .lines()
                                     .into_iter()
                                     .map(|line| line.trim())
