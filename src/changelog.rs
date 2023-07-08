@@ -247,12 +247,14 @@ impl Changelog {
                             !section_name.eq_ignore_ascii_case(&self.unreleased_heading(scope))
                         } else {
                             match scope {
-                                Some(scope) => section_name.to_lowercase().starts_with(&format!(
-                                    "[{}@v{}]",
-                                    scope.name(),
-                                    name.to_lowercase()
-                                )),
-                                None => section_name
+                                Some(scope) if !scope.is_root() => {
+                                    section_name.to_lowercase().starts_with(&format!(
+                                        "[{}@v{}]",
+                                        scope.name(),
+                                        name.to_lowercase()
+                                    ))
+                                }
+                                _ => section_name
                                     .to_lowercase()
                                     .starts_with(&format!("[{}]", name.to_lowercase())),
                             }
@@ -389,8 +391,10 @@ impl Changelog {
                                 link.clone().replace(
                                     "HEAD",
                                     &match scope {
-                                        Some(scope) => format!("{}@v{}", scope.name(), version),
-                                        None => format!("v{}", version),
+                                        Some(scope) if !scope.is_root() => {
+                                            format!("{}@v{}", scope.name(), version)
+                                        }
+                                        _ => format!("v{}", version),
                                     },
                                 ),
                             );

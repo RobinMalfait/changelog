@@ -23,11 +23,13 @@ impl Commit {
 
         let long_hash = git.long_hash(maybe_hash)?;
         let short_hash = git.short_hash(maybe_hash)?;
-        let title = git.commit_message(maybe_hash)?;
+        let mut title = git.commit_message(maybe_hash)?;
+        // Uppercase first letter of `title`
+        title.replace_range(..1, &title[..1].to_uppercase());
 
         Ok(Self {
             hash: long_hash,
-            short_hash,
+            short_hash: short_hash[0..7].to_string(),
             title,
             repo,
         })

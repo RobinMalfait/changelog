@@ -226,7 +226,7 @@ async fn main() -> Result<()> {
                 .items(
                     &options
                         .iter()
-                        .map(|package| package.name())
+                        .map(|package| package.display_name())
                         .collect::<Vec<_>>(),
                 )
                 .clear(true)

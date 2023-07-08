@@ -134,6 +134,8 @@ pub struct PackageJSON {
     // Meta data
     #[serde(skip)]
     pwd: PathBuf,
+    #[serde(skip)]
+    is_root: bool,
 
     // Actual PackageJSON data
     name: String,
@@ -153,6 +155,29 @@ impl PackageJSON {
             .map_err(|e| eyre!(e))
     }
 
+    pub fn from_root(dir: &Path) -> Result<Self> {
+        let package_json_path = dir.join("package.json");
+        let contents = std::fs::read_to_string(package_json_path)?;
+        serde_json::from_str::<Self>(&contents)
+            .map(|mut pkg| {
+                pkg.pwd = dir.to_path_buf();
+                pkg
+            })
+            .map_err(|e| eyre!(e))
+            .map(|mut root| {
+                root.is_root = true;
+                root
+            })
+    }
+
+    pub fn display_name(&self) -> String {
+        if self.is_root {
+            format!("{} {}", self.name, "(root)".italic().dimmed())
+        } else {
+            self.name.to_owned()
+        }
+    }
+
     pub fn from_current_directory() -> Result<Self> {
         Self::from_directory(&std::env::current_dir()?)
     }
@@ -163,6 +188,10 @@ impl PackageJSON {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn is_root(&self) -> bool {
+        self.is_root
     }
 
     pub fn version_mut(&mut self) -> &mut SemVer {
@@ -176,7 +205,7 @@ impl PackageJSON {
     pub fn packages(&self) -> Result<Vec<PackageJSON>> {
         let base = &self.pwd;
 
-        let mut packages: Vec<PackageJSON> = vec![];
+        let mut packages: Vec<PackageJSON> = vec![PackageJSON::from_root(base)?];
 
         if let Some(workspaces) = &self.workspaces {
             for workspace_glob in workspaces {
