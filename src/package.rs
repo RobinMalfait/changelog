@@ -34,28 +34,7 @@ impl SemVer {
             "minor" => self.new_minor(),
             "patch" => self.new_patch(),
             "infer" => *self,
-            _ => {
-                let mut parts = version.split('.');
-
-                let (major, minor, patch) = match (parts.next(), parts.next(), parts.next()) {
-                    (Some(major), Some(minor), Some(patch)) => (
-                        major.parse::<u64>()?,
-                        minor.parse::<u64>()?,
-                        patch.parse::<u64>()?,
-                    ),
-                    (None, _, _) => {
-                        return Err(eyre!("{} version is missing", "major".blue().bold()))
-                    }
-                    (_, None, _) => {
-                        return Err(eyre!("{} version is missing", "minor".blue().bold()))
-                    }
-                    (_, _, None) => {
-                        return Err(eyre!("{} version is missing", "patch".blue().bold()))
-                    }
-                };
-
-                Self::new(major, minor, patch)
-            }
+            _ => version.parse::<Self>()?,
         };
 
         *self = version;
