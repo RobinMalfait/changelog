@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Semantic Versioning 2.0.0: https://semver.org
-#[derive(Serialize, Debug, Copy, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub struct SemVer {
     /// Version when you make incompatible API changes
     major: u64,
@@ -17,14 +17,19 @@ pub struct SemVer {
 
     /// Version when you make backwards compatible bug fixes
     patch: u64,
+
+    /// A pre-release version MAY be denoted by appending a hyphen and a series of dot separated
+    /// identifiers immediately following the patch version.
+    pre_release: Option<String>,
 }
 
 impl SemVer {
-    pub fn new(major: u64, minor: u64, patch: u64) -> Self {
+    pub fn new(major: u64, minor: u64, patch: u64, pre_release: Option<String>) -> Self {
         Self {
             major,
             minor,
             patch,
+            pre_release,
         }
     }
 
@@ -33,33 +38,41 @@ impl SemVer {
             "major" => self.new_major(),
             "minor" => self.new_minor(),
             "patch" => self.new_patch(),
-            "infer" => *self,
+            "infer" => self.clone(),
             _ => version.parse::<Self>()?,
         };
 
         *self = version;
 
-        Ok(*self)
+        Ok(self.clone())
     }
 }
 
 impl SemVer {
     fn new_major(&self) -> Self {
-        Self::new(self.major + 1, 0, 0)
+        Self::new(self.major + 1, 0, 0, None)
     }
 
     fn new_minor(&self) -> Self {
-        Self::new(self.major, self.minor + 1, 0)
+        Self::new(self.major, self.minor + 1, 0, None)
     }
 
     fn new_patch(&self) -> Self {
-        Self::new(self.major, self.minor, self.patch + 1)
+        Self::new(self.major, self.minor, self.patch + 1, None)
     }
 }
 
 impl Display for SemVer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+        if let Some(pre_release) = &self.pre_release {
+            write!(
+                f,
+                "{}.{}.{}-{}",
+                self.major, self.minor, self.patch, pre_release
+            )
+        } else {
+            write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+        }
     }
 }
 
@@ -73,6 +86,10 @@ impl FromStr for SemVer {
             "patch" => Ok(PackageJSON::from_current_directory()?.version.new_patch()),
             "infer" => Ok(PackageJSON::from_current_directory()?.version),
             _ => {
+                let (s, pre_release) = match s.split_once('-') {
+                    Some((s, pre_release)) => (s, Some(pre_release.to_owned())),
+                    None => (s, None),
+                };
                 let mut parts = s.split('.');
 
                 let (major, minor, patch) = match (parts.next(), parts.next(), parts.next()) {
@@ -92,7 +109,7 @@ impl FromStr for SemVer {
                     }
                 };
 
-                Ok(Self::new(major, minor, patch))
+                Ok(Self::new(major, minor, patch, pre_release))
             }
         }
     }
