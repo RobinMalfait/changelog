@@ -351,7 +351,6 @@ async fn main() -> Result<()> {
                                     let data = data.trim();
                                     let data: Vec<_> = data
                                         .lines()
-                                        .into_iter()
                                         .map(|line| line.trim())
                                         .filter(|line| !line.is_empty())
                                         .filter(|line| !line.starts_with('#'))
@@ -480,7 +479,6 @@ async fn main() -> Result<()> {
                                 let data = data.trim();
                                 let data: Vec<_> = data
                                     .lines()
-                                    .into_iter()
                                     .map(|line| line.trim())
                                     .filter(|line| !line.is_empty())
                                     .filter(|line| !line.starts_with('#'))

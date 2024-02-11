@@ -196,7 +196,6 @@ impl Changelog {
                 let data = data.trim();
                 let data = data
                     .lines()
-                    .into_iter()
                     .map(|line| line.trim())
                     .filter(|line| !line.is_empty())
                     .filter(|line| !line.starts_with('#'))
@@ -299,14 +298,14 @@ impl Changelog {
                         version.blue().bold(),
                         scope
                             .map(|scope| format!("({})", scope.name().white().dimmed()))
-                            .unwrap_or_else(|| "".to_string())
+                            .unwrap_or_default()
                     ),
                     None => format!(
                         "Couldn't find notes for version: {} {}",
                         "<unknown>".blue().bold(),
                         scope
                             .map(|scope| format!("({})", scope.name().white().dimmed()))
-                            .unwrap_or_else(|| "".to_string())
+                            .unwrap_or_default()
                     ),
                 }
             },
@@ -503,10 +502,8 @@ mod tests {
 
         assert_eq!(
             c.list(Amount::All).unwrap(),
-            vec![
-                "- unreleased      https://github.com/RobinMalfait/changelog/compare/v0.1.0...HEAD",
-                "- 0.1.0           https://github.com/RobinMalfait/changelog/releases/tag/v0.1.0",
-            ]
+            ["- unreleased      https://github.com/RobinMalfait/changelog/compare/v0.1.0...HEAD",
+                "- 0.1.0           https://github.com/RobinMalfait/changelog/releases/tag/v0.1.0"]
             .join("\n")
         );
     }
