@@ -635,12 +635,17 @@ async fn main() -> Result<()> {
                                 },
                             )?;
 
-                            // Commit the `package.json` file
-                            repo.add(pwd_str)?.commit(&format!(
-                                "{} - {}",
-                                &version,
-                                &package.name()
-                            ))?;
+                            // Add the `package-lock.json` file
+                            let pkg_lock = pwd.join("package-lock.json");
+                            if pkg_lock.exists() {
+                                repo.add(pkg_lock.to_str().unwrap())?;
+                            }
+
+                            // Add the `package.json` file
+                            repo.add(pwd.join("package.json").to_str().unwrap())?;
+
+                            // Commit
+                            repo.commit(&format!("{} - {}", &version, &package.name()))?;
 
                             // Generate a tag
                             repo.tag(&format!("{}@v{}", &package.name(), &version))?;
@@ -683,7 +688,13 @@ async fn main() -> Result<()> {
                             },
                         )?;
 
-                        // Add the package.json
+                        // Add the `package-lock.json` file
+                        let pkg_lock = pwd.join("package-lock.json");
+                        if pkg_lock.exists() {
+                            repo.add(pkg_lock.to_str().unwrap())?;
+                        }
+
+                        // Add the `package.json` file
                         repo.add(pwd.join("package.json").to_str().unwrap())?;
 
                         // Commit the version
